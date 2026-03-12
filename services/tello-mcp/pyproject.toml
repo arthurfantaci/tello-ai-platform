@@ -2,11 +2,19 @@
 name = "tello-mcp"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["tello-core"]
+dependencies = [
+    "tello-core",
+    "fastmcp>=3.0.0",
+    "djitellopy>=2.5.0",
+    "redis>=5.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tello_mcp"]
 
 [tool.uv.sources]
 tello-core = { workspace = true }
