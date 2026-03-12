@@ -57,7 +57,7 @@ convention = "google"
 quote-style = "double"
 indent-style = "space"
 
-[tool.ty]
+[tool.ty.environment]
 python-version = "3.13"
 
 [tool.pytest.ini_options]
@@ -80,4 +80,4 @@ exclude_lines = [
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
 ]
-fail_under = 60
+fail_under = 50

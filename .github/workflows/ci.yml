@@ -22,14 +22,20 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [tello-core, tello-mcp]
+        include:
+          - package: tello-core
+            test-path: packages/tello-core/tests/
+            cov-source: packages/tello-core/src
+          - package: tello-mcp
+            test-path: services/tello-mcp/tests/
+            cov-source: services/tello-mcp/src
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
       - run: uv sync --frozen
-      - run: uv run --package ${{ matrix.package }} pytest --cov --tb=short
+      - run: uv run --package ${{ matrix.package }} pytest ${{ matrix.test-path }} --cov=${{ matrix.cov-source }} --tb=short
 
   type-check:
     runs-on: ubuntu-latest
