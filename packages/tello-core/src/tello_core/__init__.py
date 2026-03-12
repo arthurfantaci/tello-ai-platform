@@ -26,25 +26,21 @@ from tello_core.neo4j_client import create_neo4j_driver, neo4j_lifespan
 from tello_core.redis_client import create_redis_client, redis_health_check
 
 __all__ = [
-    # Config
+    "Anomaly",
     "BaseServiceConfig",
-    "configure_structlog",
-    # Exceptions
     "CommandError",
     "ConfigurationError",
     "ConnectionError",
-    "TelloError",
-    "ValidationError",
-    # Models
-    "Anomaly",
     "FlightCommand",
     "FlightSession",
     "MissionPad",
     "RoomNode",
     "TelemetryFrame",
     "TelemetrySample",
+    "TelloError",
+    "ValidationError",
     "VisualEntity",
-    # Infrastructure
+    "configure_structlog",
     "create_neo4j_driver",
     "create_redis_client",
     "neo4j_lifespan",

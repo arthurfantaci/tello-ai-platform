@@ -7,14 +7,10 @@ Run:
 
 from __future__ import annotations
 
-import asyncio
-import sys
-
 from fastmcp import FastMCP
 
 from tello_core.config import configure_structlog
 from tello_core.redis_client import create_redis_client
-
 from tello_mcp.config import TelloMcpConfig
 from tello_mcp.drone import DroneAdapter
 from tello_mcp.queue import CommandQueue

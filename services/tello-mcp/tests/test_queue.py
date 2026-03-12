@@ -36,6 +36,7 @@ class TestCommandQueue:
             def cmd():
                 execution_order.append(n)
                 return {"status": "ok", "n": n}
+
             return cmd
 
         consumer_task = asyncio.create_task(queue.start())

@@ -1,7 +1,8 @@
 """Tests for tello_core Redis client factory."""
 
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from tello_core.redis_client import create_redis_client, redis_health_check
 
@@ -13,6 +14,7 @@ class TestCreateRedisClient:
 
     def test_returns_redis_instance(self):
         import redis.asyncio as aioredis
+
         client = create_redis_client("redis://localhost:6379")
         assert isinstance(client, aioredis.Redis)
 

@@ -12,7 +12,7 @@ def create_redis_client(url: str) -> aioredis.Redis:
     Args:
         url: Redis connection URL (redis:// or rediss://).
     """
-    logger.info("Creating Redis client for %s", url.split("@")[-1])
+    logger.info("Creating Redis client for %s", url.rsplit("@", maxsplit=1)[-1])
     return aioredis.from_url(url, decode_responses=True)
 
 

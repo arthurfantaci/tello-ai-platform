@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, AsyncIterator
+from typing import TYPE_CHECKING
 
 import structlog
 from neo4j import GraphDatabase
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from neo4j import Driver
 
     from tello_core.config import BaseServiceConfig

@@ -74,7 +74,9 @@ class TestTelemetryFrame:
 
 class TestRoomNode:
     def test_valid_room(self):
-        room = RoomNode(id="living_room", name="Living Room", width_cm=400, depth_cm=500, height_cm=270)
+        room = RoomNode(
+            id="living_room", name="Living Room", width_cm=400, depth_cm=500, height_cm=270
+        )
         assert room.id == "living_room"
 
 

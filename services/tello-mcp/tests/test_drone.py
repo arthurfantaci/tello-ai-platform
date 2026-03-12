@@ -1,8 +1,6 @@
 """Tests for the DroneAdapter — djitellopy abstraction layer."""
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from tello_mcp.drone import DroneAdapter
 

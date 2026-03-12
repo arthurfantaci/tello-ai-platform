@@ -1,8 +1,6 @@
 """Tests for the telemetry publisher."""
 
-import asyncio
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
 
 import pytest
 
@@ -21,7 +19,7 @@ def sample_frame():
         roll=0.0,
         yaw=180.0,
         flight_time_s=45,
-        timestamp=datetime(2026, 3, 12, 10, 0, 0, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 3, 12, 10, 0, 0, tzinfo=UTC),
     )
 
 

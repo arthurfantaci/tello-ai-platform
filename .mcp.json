@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "neo4j": {
+      "type": "stdio",
+      "command": "neo4j-mcp",
+      "args": ["--neo4j-read-only", "true"],
+      "env": {
+        "NEO4J_URI": "bolt://localhost:7687",
+        "NEO4J_USERNAME": "neo4j",
+        "NEO4J_PASSWORD": { "secret": "NEO4J_PASSWORD" }
+      }
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-neo4j-memory"],
+      "env": {
+        "NEO4J_URI": "bolt://localhost:7687",
+        "NEO4J_USERNAME": "neo4j",
+        "NEO4J_PASSWORD": { "secret": "NEO4J_PASSWORD" }
+      }
+    },
+    "tello-mcp": {
+      "command": "uv",
+      "args": ["run", "--package", "tello-mcp", "python", "-m", "tello_mcp.server"],
+      "cwd": "."
+    }
+  }
+}

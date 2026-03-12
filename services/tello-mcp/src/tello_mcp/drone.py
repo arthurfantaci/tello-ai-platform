@@ -6,7 +6,7 @@ If djitellopy ever needs a patch, this is the only file to change.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from djitellopy import Tello
@@ -142,7 +142,7 @@ class DroneAdapter:
             roll=float(self._tello.get_roll()),
             yaw=float(self._tello.get_yaw()),
             flight_time_s=self._tello.get_flight_time(),
-            timestamp=datetime.now(tz=timezone.utc),
+            timestamp=datetime.now(tz=UTC),
         )
 
     def detect_mission_pad(self) -> dict:

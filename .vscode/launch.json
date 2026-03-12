@@ -1,0 +1,42 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "tello-mcp (stdio)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "tello_mcp.server",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/packages/tello-core/src:${workspaceFolder}/services/tello-mcp/src"
+            }
+        },
+        {
+            "name": "tello-mcp (HTTP)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "tello_mcp.server",
+            "args": ["--transport", "streamable-http", "--port", "8100"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/packages/tello-core/src:${workspaceFolder}/services/tello-mcp/src"
+            }
+        },
+        {
+            "name": "Test: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["${file}", "-v"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Test: tello-mcp",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["services/tello-mcp/tests/", "-v"],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

@@ -7,7 +7,10 @@ dispatches to the drone sequentially. Prevents "takeoff while landing" conflicts
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import structlog
 

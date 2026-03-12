@@ -9,8 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 # ── Hardware Layer ────────────────────────────────────────────────────
+
 
 class FlightCommand(BaseModel):
     """A single drone flight command."""
@@ -36,6 +36,7 @@ class TelemetryFrame(BaseModel):
 
 # ── Navigation Layer ──────────────────────────────────────────────────
 
+
 class RoomNode(BaseModel):
     """A room in the physical environment."""
 
@@ -59,6 +60,7 @@ class MissionPad(BaseModel):
 
 # ── Vision Layer ──────────────────────────────────────────────────────
 
+
 class VisualEntity(BaseModel):
     """An object observed by the drone's camera."""
 
@@ -71,6 +73,7 @@ class VisualEntity(BaseModel):
 
 
 # ── Telemetry Layer ───────────────────────────────────────────────────
+
 
 class FlightSession(BaseModel):
     """A recorded flight session."""

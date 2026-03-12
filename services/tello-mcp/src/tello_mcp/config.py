@@ -19,7 +19,7 @@ class TelloMcpConfig(BaseServiceConfig):
     events_stream: str = "tello:events"
 
     @classmethod
-    def from_env(cls, **overrides) -> Self:
+    def from_env(cls, **overrides: str | int | float | bool) -> Self:
         """Load tello-mcp config from environment."""
         overrides.setdefault("tello_wifi_ssid", os.environ.get("TELLO_WIFI_SSID", ""))
         return BaseServiceConfig.from_env.__func__(cls, **overrides)  # type: ignore[attr-defined]

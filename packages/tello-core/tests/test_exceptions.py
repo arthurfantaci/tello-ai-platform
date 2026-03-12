@@ -1,10 +1,14 @@
 """Tests for tello_core exception hierarchy."""
 
 from tello_core.exceptions import (
-    TelloError,
-    ConfigurationError,
-    ConnectionError as TelloConnectionError,
     CommandError,
+    ConfigurationError,
+    TelloError,
+)
+from tello_core.exceptions import (
+    ConnectionError as TelloConnectionError,
+)
+from tello_core.exceptions import (
     ValidationError as TelloValidationError,
 )
 

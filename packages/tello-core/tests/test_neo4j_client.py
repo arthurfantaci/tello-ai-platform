@@ -24,7 +24,9 @@ class TestCreateNeo4jDriver:
     def test_custom_pool_settings(self, mock_gdb):
         mock_gdb.driver.return_value = MagicMock()
         create_neo4j_driver(
-            "bolt://localhost:7687", "neo4j", "pw",
+            "bolt://localhost:7687",
+            "neo4j",
+            "pw",
             max_connection_pool_size=10,
             connection_acquisition_timeout=60.0,
         )

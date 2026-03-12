@@ -22,6 +22,7 @@ class TestSensorTools:
             def decorator(fn):
                 self.registered_tools[fn.__name__] = fn
                 return fn
+
             return decorator
 
         self.mcp.tool = mock_tool

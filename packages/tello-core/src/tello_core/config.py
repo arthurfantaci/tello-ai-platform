@@ -36,7 +36,7 @@ class BaseServiceConfig:
     neo4j_connection_acquisition_timeout: float = 30.0
 
     @classmethod
-    def from_env(cls, **overrides) -> Self:
+    def from_env(cls, **overrides: str | int | float | bool) -> Self:
         """Load configuration from environment variables.
 
         Reads: NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, REDIS_URL.

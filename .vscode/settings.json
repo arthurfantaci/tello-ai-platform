@@ -1,0 +1,44 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.extraPaths": [
+        "packages/tello-core/src",
+        "services/tello-mcp/src"
+    ],
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+        }
+    },
+    "ruff.configuration": "${workspaceFolder}/pyproject.toml",
+    "ruff.lint.run": "onSave",
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": [
+        "packages",
+        "services",
+        "-v"
+    ],
+    "editor.rulers": [100],
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.pytest_cache": true,
+        "**/.ruff_cache": true,
+        "**/.ty_cache": true,
+        "**/node_modules": true,
+        "**/*.egg-info": true
+    },
+    "search.exclude": {
+        "**/.venv": true,
+        "**/uv.lock": true,
+        "**/neo4j_data": true,
+        "**/redis_data": true
+    }
+}
