@@ -47,6 +47,20 @@ uv run ty check packages/ services/    # advisory (may have errors)
 - **Python:** 3.13+, type hints everywhere, `from __future__ import annotations` in all modules
 - **Tooling:** Ruff (lint + format), ty (type check), pytest + pytest-asyncio
 
+## Git Operations
+
+- PR body MUST contain `Closes #N` for every issue it delivers — parenthetical `(#N)` in titles is just a mention, not a closing keyword
+- **Merge strategy** — choose per-situation, explain the tradeoff to the user, and walk them through it:
+  - `--squash`: clean history (1 commit per PR). Use for simple PRs and solo work. **Caution**: breaks stacked PR branch linkage — downstream branches need cherry-pick rebase
+  - `--merge`: preserves branch topology. Use for stacked PRs when you want to avoid the rebase tax
+  - `--rebase`: linear history without merge commits. Use when commit-by-commit history matters
+- **Stacked PRs after squash-merge**: cherry-pick each phase's commit onto updated main (`git checkout -B <branch> origin/main && git cherry-pick <sha> && git push --force-with-lease`), then retarget PR (`gh pr edit <n> --base main`)
+- **After every merge**, verify issues closed: `gh issue view <N> --json state`. If not, close manually with `gh issue close <N> --comment "Delivered in PR #X"`
+- Always explain git/GitHub mechanics to the user — they are learning professional workflows
+- Branch protection ruleset requires PRs + status checks (lint, test) for `main`
+- Force push requires temporarily disabling the ruleset via `gh api --method PUT repos/.../rulesets/<id>`
+- This repo is **public on GitHub** — treat all committed content as portfolio-visible
+
 ## Logging
 
 - structlog everywhere — JSON output, printf-style formatting
