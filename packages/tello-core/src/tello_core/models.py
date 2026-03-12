@@ -1,0 +1,101 @@
+"""Shared Pydantic models for the tello-ai-platform.
+
+These models are the data contracts that flow between services via Redis
+pub/sub and Streams. Defined once in tello-core, used by all services.
+"""
+
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+# ── Hardware Layer ────────────────────────────────────────────────────
+
+class FlightCommand(BaseModel):
+    """A single drone flight command."""
+
+    direction: Literal["up", "down", "left", "right", "forward", "back"]
+    distance_cm: int = Field(ge=20, le=500)
+    speed: int | None = None  # cm/s
+
+
+class TelemetryFrame(BaseModel):
+    """Real-time telemetry snapshot from the drone."""
+
+    battery_pct: int
+    height_cm: int
+    tof_cm: int
+    temp_c: float
+    pitch: float
+    roll: float
+    yaw: float
+    flight_time_s: int
+    timestamp: datetime
+
+
+# ── Navigation Layer ──────────────────────────────────────────────────
+
+class RoomNode(BaseModel):
+    """A room in the physical environment."""
+
+    id: str
+    name: str
+    width_cm: int
+    depth_cm: int
+    height_cm: int
+
+
+class MissionPad(BaseModel):
+    """A Tello TT mission pad placed in a room."""
+
+    id: int = Field(ge=1, le=8)
+    room_id: str
+    x_cm: int
+    y_cm: int
+    last_tof_approach_cm: int | None = None
+    last_visited: datetime | None = None
+
+
+# ── Vision Layer ──────────────────────────────────────────────────────
+
+class VisualEntity(BaseModel):
+    """An object observed by the drone's camera."""
+
+    name: str
+    type: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    position: str | None = None
+    room_id: str
+    last_seen: datetime
+
+
+# ── Telemetry Layer ───────────────────────────────────────────────────
+
+class FlightSession(BaseModel):
+    """A recorded flight session."""
+
+    id: str
+    start_time: datetime
+    end_time: datetime | None = None
+    room_id: str
+    mission_id: str | None = None
+
+
+class TelemetrySample(BaseModel):
+    """A single telemetry measurement within a session."""
+
+    battery_pct: int
+    height_cm: int
+    tof_cm: int
+    temp_c: float
+    timestamp: datetime
+
+
+class Anomaly(BaseModel):
+    """A detected flight anomaly."""
+
+    type: str
+    severity: Literal["warning", "critical"]
+    detail: str
+    timestamp: datetime
