@@ -63,7 +63,11 @@ python-version = "3.13"
 [tool.pytest.ini_options]
 testpaths = ["packages", "services"]
 asyncio_mode = "auto"
-addopts = ["-ra", "-q"]
+addopts = ["-ra", "-q", "--import-mode=importlib"]
+pythonpath = [
+    "packages/tello-core/src",
+    "services/tello-mcp/src",
+]
 
 [tool.coverage.run]
 source = ["packages/tello-core/src", "services/tello-mcp/src"]
