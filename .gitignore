@@ -1,0 +1,54 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Astral tooling caches
+.ruff_cache/
+.ty_cache/
+
+# Brainstorm companion
+.superpowers/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker volumes (if local)
+neo4j_data/
+redis_data/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Git worktrees
+.worktrees/
