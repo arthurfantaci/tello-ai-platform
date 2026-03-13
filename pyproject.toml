@@ -50,6 +50,7 @@ convention = "google"
 "**/tests/**/*.py" = [
     "S101", "S105", "S106", "S311", "SIM117",
     "ANN", "D", "PLR2004", "ARG", "PT",
+    "RUF012", "RUF059",
 ]
 "**/server.py" = ["S104"]
 "**/tools/**/*.py" = ["D417", "TC002"]
@@ -70,10 +71,11 @@ pythonpath = [
     "packages/tello-core/src",
     "services/tello-mcp/src",
     "services/tello-telemetry/src",
+    "services/tello-navigator/src",
 ]
 
 [tool.coverage.run]
-source = ["packages/tello-core/src", "services/tello-mcp/src", "services/tello-telemetry/src"]
+source = ["packages/tello-core/src", "services/tello-mcp/src", "services/tello-telemetry/src", "services/tello-navigator/src"]
 branch = true
 
 [tool.coverage.report]
