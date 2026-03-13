@@ -63,3 +63,36 @@ class TestDroneAdapter:
             result = adapter.move("forward", 100)
             mock_drone.move_forward.assert_called_once_with(100)
             assert result["status"] == "ok"
+
+    def test_set_led(self, mock_drone):
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.set_led(255, 0, 0)
+            mock_drone.set_led.assert_called_once_with(r=255, g=0, b=0)
+            assert result["status"] == "ok"
+
+    def test_set_led_when_not_connected(self):
+        with patch("tello_mcp.drone.Tello"):
+            adapter = DroneAdapter()
+            result = adapter.set_led(255, 0, 0)
+            assert result["error"] == "DRONE_NOT_CONNECTED"
+
+    def test_display_text(self, mock_drone):
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.display_text("hi")
+            mock_drone.set_display.assert_called_once_with("hi")
+            assert result["status"] == "ok"
+
+    def test_display_text_when_not_connected(self):
+        with patch("tello_mcp.drone.Tello"):
+            adapter = DroneAdapter()
+            result = adapter.display_text("hi")
+            assert result["error"] == "DRONE_NOT_CONNECTED"
+
+    def test_host_parameter(self, mock_drone):
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone) as mock_cls:
+            DroneAdapter(host="192.168.68.107")
+            mock_cls.assert_called_once_with(host="192.168.68.107")

@@ -32,6 +32,9 @@ jobs:
           - package: tello-telemetry
             test-path: services/tello-telemetry/tests/
             cov-source: services/tello-telemetry/src
+          - package: tello-navigator
+            test-path: services/tello-navigator/tests/
+            cov-source: services/tello-navigator/src
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4

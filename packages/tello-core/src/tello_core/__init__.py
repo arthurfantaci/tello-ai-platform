@@ -14,13 +14,17 @@ from tello_core.exceptions import (
 )
 from tello_core.models import (
     Anomaly,
+    Dwelling,
     FlightCommand,
     FlightSession,
+    Mission,
     MissionPad,
+    MissionStatus,
     RoomNode,
     TelemetryFrame,
     TelemetrySample,
     VisualEntity,
+    Waypoint,
 )
 from tello_core.neo4j_client import create_neo4j_driver, neo4j_lifespan
 from tello_core.redis_client import create_redis_client, redis_health_check
@@ -31,15 +35,19 @@ __all__ = [
     "CommandError",
     "ConfigurationError",
     "ConnectionError",
+    "Dwelling",
     "FlightCommand",
     "FlightSession",
+    "Mission",
     "MissionPad",
+    "MissionStatus",
     "RoomNode",
     "TelemetryFrame",
     "TelemetrySample",
     "TelloError",
     "ValidationError",
     "VisualEntity",
+    "Waypoint",
     "configure_structlog",
     "create_neo4j_driver",
     "create_redis_client",

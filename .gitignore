@@ -50,5 +50,8 @@ redis_data/
 # Playwright MCP
 .playwright-mcp/
 
+# Binary documents
+*.docx
+
 # Git worktrees
 .worktrees/

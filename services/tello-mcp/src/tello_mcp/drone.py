@@ -32,8 +32,8 @@ class DroneAdapter:
     and a consistent interface for the command queue.
     """
 
-    def __init__(self) -> None:
-        self._tello = Tello()
+    def __init__(self, host: str = "192.168.10.1") -> None:
+        self._tello = Tello(host=host)
         self._connected = False
 
     @property
@@ -155,3 +155,35 @@ class DroneAdapter:
             return err
         pad_id = self._tello.get_mission_pad_id()
         return {"pad_id": pad_id, "detected": pad_id != -1}
+
+    def set_led(self, r: int, g: int, b: int) -> dict:
+        """Set expansion board LED color.
+
+        Args:
+            r: Red value (0-255).
+            g: Green value (0-255).
+            b: Blue value (0-255).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.set_led(r=r, g=g, b=b)
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("set_led failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
+
+    def display_text(self, text: str) -> dict:
+        """Display scrolling text on the 8x8 LED matrix.
+
+        Args:
+            text: Text to display.
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.set_display(text)
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("display_text failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
