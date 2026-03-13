@@ -8,12 +8,13 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import structlog
+from fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from tello_core.models import Waypoint
 
 if TYPE_CHECKING:
-    from fastmcp import Context, FastMCP
+    from fastmcp import FastMCP
 
 logger = structlog.get_logger("tello_navigator.tools.missions")
 
