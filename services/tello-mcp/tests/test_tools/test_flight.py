@@ -50,13 +50,14 @@ class TestFlightTools:
         mock_queue = AsyncMock()
         mock_queue.enqueue = AsyncMock(return_value={"status": "ok"})
         mock_telemetry = AsyncMock()
-        self.mcp.state = {
+        mock_ctx = MagicMock()
+        mock_ctx.lifespan_context = {
             "drone": MagicMock(),
             "queue": mock_queue,
             "telemetry": mock_telemetry,
         }
         takeoff = self.registered_tools["takeoff"]
-        await takeoff(room_id="living_room")
+        await takeoff(mock_ctx, room_id="living_room")
         mock_telemetry.publish_event.assert_called_once()
         call_args = mock_telemetry.publish_event.call_args
         assert call_args[0][0] == "takeoff"

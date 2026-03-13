@@ -13,8 +13,8 @@ members = [
     "services/tello-telemetry",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "ruff>=0.6.0",
     "ty>=0.0.8",
     "pre-commit>=4.0.0",
@@ -52,6 +52,7 @@ convention = "google"
     "ANN", "D", "PLR2004", "ARG", "PT",
 ]
 "**/server.py" = ["S104"]
+"**/tools/**/*.py" = ["D417", "TC002"]  # ctx: Context must be runtime-importable for FastMCP injection
 "scripts/**/*.py" = ["D103", "S607"]
 
 [tool.ruff.format]

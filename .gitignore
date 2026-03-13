@@ -39,6 +39,9 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Binary documents
+*.docx
+
 # Logs
 *.log
 logs/

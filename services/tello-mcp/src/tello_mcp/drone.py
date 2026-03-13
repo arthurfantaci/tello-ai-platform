@@ -32,8 +32,8 @@ class DroneAdapter:
     and a consistent interface for the command queue.
     """
 
-    def __init__(self) -> None:
-        self._tello = Tello()
+    def __init__(self, host: str = "192.168.10.1") -> None:
+        self._tello = Tello(host=host)
         self._connected = False
 
     @property
@@ -144,6 +144,42 @@ class DroneAdapter:
             flight_time_s=self._tello.get_flight_time(),
             timestamp=datetime.now(tz=UTC),
         )
+
+    def set_led(self, r: int, g: int, b: int) -> dict:
+        """Set expansion board LED color (RGB 0-255)."""
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.send_expansion_command(f"led {r} {g} {b}")
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("Set LED failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
+
+    def display_text(
+        self,
+        text: str,
+        *,
+        color: str = "r",
+        direction: str = "l",
+        freq: float = 1.0,
+    ) -> dict:
+        """Display scrolling text on the 8x8 LED matrix.
+
+        Args:
+            text: Text to display.
+            color: Display color — r (red), b (blue), p (purple).
+            direction: Scroll direction — l (left), r (right), u (up), d (down).
+            freq: Scroll frequency in Hz (0.1-2.5).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.send_expansion_command(f"mled l {direction} {color} {freq} {text}")
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("Display text failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
 
     def detect_mission_pad(self) -> dict:
         """Scan for nearest mission pad.

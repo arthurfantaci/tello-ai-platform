@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 @asynccontextmanager
-async def lifespan(server: FastMCP) -> AsyncIterator[None]:
+async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
     """Manage service lifecycle.
 
     Startup: Config → structlog → Redis → Neo4j → domain objects →
@@ -45,11 +45,9 @@ async def lifespan(server: FastMCP) -> AsyncIterator[None]:
         session_repo = SessionRepository(neo4j_driver)
         consumer = StreamConsumer(redis, config, detector, session_repo)
 
-        server.state["session_repo"] = session_repo
-
         task = asyncio.create_task(consumer.run())
         try:
-            yield
+            yield {"session_repo": session_repo}
         finally:
             task.cancel()
             with suppress(asyncio.CancelledError):
