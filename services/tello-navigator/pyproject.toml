@@ -2,11 +2,21 @@
 name = "tello-navigator"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["tello-core"]
+dependencies = [
+    "tello-core",
+    "langgraph>=0.4",
+    "langgraph-checkpoint-redis>=0.3",
+    "redis>=5.0",
+    "fastmcp>=3.0.0",
+    "structlog>=24.0",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tello_navigator"]
 
 [tool.uv.sources]
 tello-core = { workspace = true }

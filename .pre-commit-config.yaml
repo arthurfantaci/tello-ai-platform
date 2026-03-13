@@ -1,6 +1,13 @@
 repos:
   - repo: local
     hooks:
+      - id: no-commit-to-main
+        name: block commits to main
+        entry: scripts/no-commit-to-main.sh
+        language: script
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
       - id: ruff-check
         name: ruff check
         entry: uv run ruff check --fix

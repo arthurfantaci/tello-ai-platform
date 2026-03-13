@@ -35,6 +35,9 @@ htmlcov/
 # Brainstorm companion
 .superpowers/
 
+# Hookify local rules
+.claude/*.local.md
+
 # OS
 .DS_Store
 Thumbs.db
