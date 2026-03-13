@@ -42,13 +42,17 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
         stream=config.events_stream,
     )
 
-    yield {
-        "drone": drone,
-        "queue": queue,
-        "redis": redis,
-        "telemetry": telemetry,
-        "config": config,
-    }
+    try:
+        yield {
+            "drone": drone,
+            "queue": queue,
+            "redis": redis,
+            "telemetry": telemetry,
+            "config": config,
+        }
+    finally:
+        drone.disconnect()
+        await redis.aclose()
 
 
 mcp = FastMCP(
