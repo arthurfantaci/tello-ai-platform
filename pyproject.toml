@@ -68,10 +68,11 @@ addopts = ["-ra", "-q", "--import-mode=importlib"]
 pythonpath = [
     "packages/tello-core/src",
     "services/tello-mcp/src",
+    "services/tello-telemetry/src",
 ]
 
 [tool.coverage.run]
-source = ["packages/tello-core/src", "services/tello-mcp/src"]
+source = ["packages/tello-core/src", "services/tello-mcp/src", "services/tello-telemetry/src"]
 branch = true
 
 [tool.coverage.report]

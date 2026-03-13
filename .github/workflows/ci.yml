@@ -29,6 +29,9 @@ jobs:
           - package: tello-mcp
             test-path: services/tello-mcp/tests/
             cov-source: services/tello-mcp/src
+          - package: tello-telemetry
+            test-path: services/tello-telemetry/tests/
+            cov-source: services/tello-telemetry/src
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
