@@ -1520,11 +1520,19 @@ name = "tello-telemetry"
 version = "0.1.0"
 source = { editable = "services/tello-telemetry" }
 dependencies = [
+    { name = "fastmcp" },
+    { name = "neo4j" },
+    { name = "redis" },
     { name = "tello-core" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "tello-core", editable = "packages/tello-core" }]
+requires-dist = [
+    { name = "fastmcp", specifier = ">=3.0.0" },
+    { name = "neo4j", specifier = ">=5.15.0" },
+    { name = "redis", specifier = ">=5.0.0" },
+    { name = "tello-core", editable = "packages/tello-core" },
+]
 
 [[package]]
 name = "tello-vision"
