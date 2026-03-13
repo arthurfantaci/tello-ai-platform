@@ -14,11 +14,18 @@ def register(mcp: FastMCP) -> None:
     """Register flight control tools on the MCP server."""
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
-    async def takeoff() -> dict:
-        """Take off and hover at ~50cm."""
+    async def takeoff(room_id: str = "unknown") -> dict:
+        """Take off and hover at ~50cm.
+
+        Args:
+            room_id: Room identifier for session tracking (default "unknown").
+        """
         drone = mcp.state["drone"]
         queue = mcp.state["queue"]
-        return await queue.enqueue(drone.takeoff)
+        telemetry = mcp.state["telemetry"]
+        result = await queue.enqueue(drone.takeoff)
+        await telemetry.publish_event("takeoff", {"room_id": room_id})
+        return result
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     async def land() -> dict:
