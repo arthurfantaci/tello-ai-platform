@@ -7,13 +7,17 @@ from pydantic import ValidationError
 
 from tello_core.models import (
     Anomaly,
+    Dwelling,
     FlightCommand,
     FlightSession,
+    Mission,
     MissionPad,
+    MissionStatus,
     RoomNode,
     TelemetryFrame,
     TelemetrySample,
     VisualEntity,
+    Waypoint,
 )
 
 
@@ -145,3 +149,173 @@ class TestAnomaly:
                 detail="x",
                 timestamp=datetime(2026, 3, 12, 10, 0, 0),
             )
+
+
+class TestWaypoint:
+    def test_valid_waypoint(self):
+        wp = Waypoint(
+            id="wp_001",
+            sequence=0,
+            room_id="living_room",
+            action="move",
+            direction="forward",
+            distance_cm=100,
+        )
+        assert wp.id == "wp_001"
+        assert wp.sequence == 0
+        assert wp.pad_id is None
+        assert wp.degrees is None
+
+    def test_takeoff_action(self):
+        wp = Waypoint(id="wp_t", sequence=0, room_id="living_room", action="takeoff")
+        assert wp.action == "takeoff"
+        assert wp.direction is None
+        assert wp.distance_cm is None
+
+    def test_rotate_action(self):
+        wp = Waypoint(id="wp_r", sequence=1, room_id="kitchen", action="rotate", degrees=90)
+        assert wp.degrees == 90
+
+    def test_goto_pad_action(self):
+        wp = Waypoint(id="wp_gp", sequence=2, room_id="bedroom", action="goto_pad", pad_id=3)
+        assert wp.action == "goto_pad"
+        assert wp.pad_id == 3
+
+    def test_invalid_action_rejected(self):
+        with pytest.raises(ValidationError):
+            Waypoint(id="wp_bad", sequence=0, room_id="r", action="flip")
+
+    def test_sequence_negative_rejected(self):
+        with pytest.raises(ValidationError):
+            Waypoint(id="wp_neg", sequence=-1, room_id="r", action="takeoff")
+
+    def test_distance_below_minimum_rejected(self):
+        with pytest.raises(ValidationError):
+            Waypoint(
+                id="wp_d",
+                sequence=0,
+                room_id="r",
+                action="move",
+                direction="forward",
+                distance_cm=10,
+            )
+
+    def test_distance_above_maximum_rejected(self):
+        with pytest.raises(ValidationError):
+            Waypoint(
+                id="wp_d",
+                sequence=0,
+                room_id="r",
+                action="move",
+                direction="forward",
+                distance_cm=501,
+            )
+
+    def test_degrees_out_of_range_rejected(self):
+        with pytest.raises(ValidationError):
+            Waypoint(id="wp_d", sequence=0, room_id="r", action="rotate", degrees=361)
+        with pytest.raises(ValidationError):
+            Waypoint(id="wp_d", sequence=0, room_id="r", action="rotate", degrees=-361)
+
+    def test_serialization_roundtrip(self):
+        wp = Waypoint(
+            id="wp_rt",
+            sequence=3,
+            room_id="hallway",
+            pad_id=2,
+            action="move",
+            direction="left",
+            distance_cm=200,
+        )
+        data = wp.model_dump()
+        restored = Waypoint.model_validate(data)
+        assert restored == wp
+
+
+class TestMissionStatus:
+    def test_enum_values(self):
+        assert MissionStatus.PLANNED == "planned"
+        assert MissionStatus.EXECUTING == "executing"
+        assert MissionStatus.COMPLETED == "completed"
+        assert MissionStatus.ABORTED == "aborted"
+
+    def test_is_string(self):
+        assert isinstance(MissionStatus.PLANNED, str)
+
+    def test_all_values(self):
+        values = {s.value for s in MissionStatus}
+        assert values == {"planned", "executing", "completed", "aborted"}
+
+
+class TestMission:
+    def test_valid_mission(self):
+        now = datetime(2026, 3, 13, 10, 0, 0)
+        mission = Mission(
+            id="m_001",
+            goal="Survey living room",
+            room_ids=["living_room"],
+            created_at=now,
+        )
+        assert mission.status == MissionStatus.PLANNED
+        assert mission.waypoints == []
+        assert mission.started_at is None
+        assert mission.completed_at is None
+        assert mission.error is None
+
+    def test_mission_with_waypoints(self):
+        now = datetime(2026, 3, 13, 10, 0, 0)
+        wp = Waypoint(id="wp_1", sequence=0, room_id="kitchen", action="takeoff")
+        mission = Mission(
+            id="m_002",
+            goal="Go to kitchen",
+            status=MissionStatus.EXECUTING,
+            room_ids=["living_room", "kitchen"],
+            waypoints=[wp],
+            created_at=now,
+            started_at=now,
+        )
+        assert len(mission.waypoints) == 1
+        assert mission.status == MissionStatus.EXECUTING
+
+    def test_serialization_roundtrip(self):
+        now = datetime(2026, 3, 13, 10, 0, 0)
+        wp = Waypoint(
+            id="wp_1",
+            sequence=0,
+            room_id="lr",
+            action="move",
+            direction="forward",
+            distance_cm=100,
+        )
+        mission = Mission(
+            id="m_rt",
+            goal="Roundtrip test",
+            room_ids=["lr"],
+            waypoints=[wp],
+            created_at=now,
+        )
+        data = mission.model_dump()
+        restored = Mission.model_validate(data)
+        assert restored == mission
+        assert restored.waypoints[0].distance_cm == 100
+
+
+class TestDwelling:
+    def test_valid_dwelling(self):
+        dw = Dwelling(
+            id="4309_Donny_Martel_Way",
+            name="Arthur's Apartment",
+            address="4309 Donny Martel Way, Tewksbury, MA",
+        )
+        assert dw.id == "4309_Donny_Martel_Way"
+        assert dw.address is not None
+
+    def test_dwelling_address_optional(self):
+        dw = Dwelling(id="test_home", name="Test Home")
+        assert dw.address is None
+
+    def test_serialization_roundtrip(self):
+        dw = Dwelling(id="dw_rt", name="Roundtrip", address="123 Main St")
+        data = dw.model_dump()
+        restored = Dwelling.model_validate(data)
+        assert restored == dw

@@ -5,6 +5,7 @@ pub/sub and Streams. Defined once in tello-core, used by all services.
 """
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -56,6 +57,50 @@ class MissionPad(BaseModel):
     y_cm: int
     last_tof_approach_cm: int | None = None
     last_visited: datetime | None = None
+
+
+class Waypoint(BaseModel):
+    """A single step in a mission plan."""
+
+    id: str
+    sequence: int = Field(ge=0)
+    room_id: str
+    pad_id: int | None = None
+    action: Literal["takeoff", "move", "rotate", "land", "hover", "goto_pad"]
+    direction: Literal["up", "down", "left", "right", "forward", "back"] | None = None
+    distance_cm: int | None = Field(default=None, ge=20, le=500)
+    degrees: int | None = Field(default=None, ge=-360, le=360)
+
+
+class MissionStatus(StrEnum):
+    """Mission lifecycle states."""
+
+    PLANNED = "planned"
+    EXECUTING = "executing"
+    COMPLETED = "completed"
+    ABORTED = "aborted"
+
+
+class Mission(BaseModel):
+    """A multi-step flight mission."""
+
+    id: str
+    goal: str
+    status: MissionStatus = MissionStatus.PLANNED
+    room_ids: list[str]
+    waypoints: list[Waypoint] = []
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
+
+
+class Dwelling(BaseModel):
+    """A physical dwelling that groups rooms."""
+
+    id: str
+    name: str
+    address: str | None = None
 
 
 # ── Vision Layer ──────────────────────────────────────────────────────
