@@ -1,0 +1,90 @@
+{
+  "dwelling": {
+    "id": "4309_Donny_Martel_Way_Tewksbury_MA",
+    "name": "4309 Donny Martel Way",
+    "address": "4309 Donny Martel Way, Tewksbury, MA"
+  },
+  "rooms": [
+    {
+      "id": "4309_Donny_Martel_Way_Tewksbury_MA:living",
+      "name": "Living",
+      "width_cm": 488,
+      "depth_cm": 622,
+      "height_cm": 234
+    },
+    {
+      "id": "4309_Donny_Martel_Way_Tewksbury_MA:kitchen",
+      "name": "Kitchen",
+      "width_cm": 282,
+      "depth_cm": 320,
+      "height_cm": 234
+    },
+    {
+      "id": "4309_Donny_Martel_Way_Tewksbury_MA:tv-room",
+      "name": "TV Room",
+      "width_cm": 427,
+      "depth_cm": 284,
+      "height_cm": 234
+    },
+    {
+      "id": "4309_Donny_Martel_Way_Tewksbury_MA:bedroom",
+      "name": "Bedroom",
+      "width_cm": 434,
+      "depth_cm": 437,
+      "height_cm": 234
+    },
+    {
+      "id": "4309_Donny_Martel_Way_Tewksbury_MA:hall",
+      "name": "Hall",
+      "width_cm": 109,
+      "depth_cm": 480,
+      "height_cm": 234
+    }
+  ],
+  "pads": [
+    { "id": 1, "room_id": "4309_Donny_Martel_Way_Tewksbury_MA:living", "x_cm": 0, "y_cm": 0 },
+    { "id": 2, "room_id": "4309_Donny_Martel_Way_Tewksbury_MA:living", "x_cm": 0, "y_cm": 0 },
+    { "id": 3, "room_id": "4309_Donny_Martel_Way_Tewksbury_MA:kitchen", "x_cm": 0, "y_cm": 0 },
+    { "id": 4, "room_id": "4309_Donny_Martel_Way_Tewksbury_MA:tv-room", "x_cm": 0, "y_cm": 0 },
+    { "id": 5, "room_id": "4309_Donny_Martel_Way_Tewksbury_MA:tv-room", "x_cm": 0, "y_cm": 0 },
+    { "id": 6, "room_id": "4309_Donny_Martel_Way_Tewksbury_MA:bedroom", "x_cm": 0, "y_cm": 0 },
+    { "id": 7, "room_id": "4309_Donny_Martel_Way_Tewksbury_MA:bedroom", "x_cm": 0, "y_cm": 0 },
+    { "id": 8, "room_id": "4309_Donny_Martel_Way_Tewksbury_MA:hall", "x_cm": 0, "y_cm": 0 }
+  ],
+  "connections": [
+    {
+      "from_room": "4309_Donny_Martel_Way_Tewksbury_MA:living",
+      "to_room": "4309_Donny_Martel_Way_Tewksbury_MA:kitchen",
+      "via_pad": null,
+      "direction": null,
+      "passage_type": "open"
+    },
+    {
+      "from_room": "4309_Donny_Martel_Way_Tewksbury_MA:living",
+      "to_room": "4309_Donny_Martel_Way_Tewksbury_MA:hall",
+      "via_pad": null,
+      "direction": null,
+      "passage_type": "archway"
+    },
+    {
+      "from_room": "4309_Donny_Martel_Way_Tewksbury_MA:hall",
+      "to_room": "4309_Donny_Martel_Way_Tewksbury_MA:tv-room",
+      "via_pad": null,
+      "direction": null,
+      "passage_type": "doorway"
+    },
+    {
+      "from_room": "4309_Donny_Martel_Way_Tewksbury_MA:hall",
+      "to_room": "4309_Donny_Martel_Way_Tewksbury_MA:bedroom",
+      "via_pad": null,
+      "direction": null,
+      "passage_type": "doorway"
+    }
+  ],
+  "_notes": {
+    "ceiling": "234cm effective (274cm actual minus ceiling fan clearance)",
+    "hall_detail": "TV Room doorway is 196cm from far end of Hall",
+    "non_flyable": ["Bath", "Deck"],
+    "pad_positions": "x_cm/y_cm are 0 placeholders — update after physical pads are placed"
+  }
+}
