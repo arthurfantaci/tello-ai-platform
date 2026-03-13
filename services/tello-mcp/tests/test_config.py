@@ -39,3 +39,23 @@ class TestTelloMcpConfig:
         assert config.telemetry_publish_hz == 10
         assert config.telemetry_channel == "tello:telemetry"
         assert config.events_stream == "tello:events"
+
+    def test_tello_host_default(self):
+        config = TelloMcpConfig(
+            neo4j_uri="bolt://localhost:7687",
+            neo4j_username="neo4j",
+            neo4j_password="pw",
+            redis_url="redis://localhost:6379",
+            service_name="test",
+        )
+        assert config.tello_host == "192.168.10.1"
+
+    def test_tello_host_from_env(self, monkeypatch):
+        monkeypatch.setenv("NEO4J_URI", "bolt://localhost:7687")
+        monkeypatch.setenv("NEO4J_USERNAME", "neo4j")
+        monkeypatch.setenv("NEO4J_PASSWORD", "pw")
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
+        monkeypatch.setenv("TELLO_HOST", "192.168.68.102")
+
+        config = TelloMcpConfig.from_env(service_name="tello-mcp")
+        assert config.tello_host == "192.168.68.102"

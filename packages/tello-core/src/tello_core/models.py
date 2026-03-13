@@ -81,7 +81,7 @@ class FlightSession(BaseModel):
     id: str
     start_time: datetime
     end_time: datetime | None = None
-    room_id: str
+    room_id: str = "unknown"
     mission_id: str | None = None
 
 

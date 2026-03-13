@@ -1,6 +1,6 @@
 """Tests for flight control MCP tools."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -44,3 +44,20 @@ class TestFlightTools:
 
     def test_rotate_registered(self):
         assert "rotate" in self.registered_tools
+
+    async def test_takeoff_publishes_room_id(self):
+        """Takeoff tool publishes room_id in the stream event."""
+        mock_queue = AsyncMock()
+        mock_queue.enqueue = AsyncMock(return_value={"status": "ok"})
+        mock_telemetry = AsyncMock()
+        self.mcp.state = {
+            "drone": MagicMock(),
+            "queue": mock_queue,
+            "telemetry": mock_telemetry,
+        }
+        takeoff = self.registered_tools["takeoff"]
+        await takeoff(room_id="living_room")
+        mock_telemetry.publish_event.assert_called_once()
+        call_args = mock_telemetry.publish_event.call_args
+        assert call_args[0][0] == "takeoff"
+        assert call_args[0][1]["room_id"] == "living_room"
