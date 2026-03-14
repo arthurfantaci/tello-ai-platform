@@ -6,10 +6,10 @@ uv workspace monorepo. Single `uv.lock` at root.
 
 - `packages/tello-core/` — shared Pydantic models, config, exceptions, Redis/Neo4j factories
 - `services/tello-mcp/` — FastMCP hardware abstraction (djitellopy wrapper)
-- `services/tello-navigator/` — LangGraph mission planner (placeholder)
+- `services/tello-navigator/` — LangGraph mission planner
 - `services/tello-vision/` — CV pipeline (placeholder)
 - `services/tello-voice/` — NL controller, dual-interface (placeholder)
-- `services/tello-telemetry/` — Flight session intelligence (placeholder)
+- `services/tello-telemetry/` — Flight session intelligence
 
 ## Commands
 
@@ -74,6 +74,7 @@ uv run ty check packages/ services/    # advisory (may have errors)
 - **Runtime errors:** Wrap SDK calls, return structured dicts `{"error": "CODE", "detail": "..."}`
 - **Logging:** `logger.exception()` for unexpected errors (includes traceback)
 - **MCP tools:** Never expose raw exceptions — always structured error responses
+- **15-second SDK timeout:** drone auto-lands if no command received for 15s. tello-mcp runs a background keepalive task to prevent this.
 
 ## Testing
 

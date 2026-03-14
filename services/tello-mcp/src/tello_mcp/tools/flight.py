@@ -64,3 +64,18 @@ def register(mcp: FastMCP) -> None:
         drone = ctx.lifespan_context["drone"]
         queue = ctx.lifespan_context["queue"]
         return await queue.enqueue(lambda: drone.rotate(degrees))
+
+    @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+    async def go_to_mission_pad(ctx: Context, x: int, y: int, z: int, speed: int, mid: int) -> dict:
+        """Fly to coordinates relative to a detected mission pad.
+
+        Args:
+            x: X position relative to pad (-500 to 500 cm).
+            y: Y position relative to pad (-500 to 500 cm).
+            z: Altitude above pad (0 to 500 cm, must be positive).
+            speed: Flight speed (10-100 cm/s).
+            mid: Target mission pad ID (1-8).
+        """
+        drone = ctx.lifespan_context["drone"]
+        queue = ctx.lifespan_context["queue"]
+        return await queue.enqueue(lambda: drone.go_xyz_speed_mid(x, y, z, speed, mid))

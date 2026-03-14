@@ -47,10 +47,18 @@ class DroneAdapter:
             self._tello.connect()
             self._connected = True
             logger.info("Drone connected, battery=%d%%", self._tello.get_battery())
-            return {"status": "ok"}
         except Exception as e:
             logger.exception("Failed to connect to drone")
             return {"error": "CONNECTION_FAILED", "detail": str(e)}
+
+        # Best-effort pad enablement — warn on failure, don't kill connection
+        try:
+            self._tello.enable_mission_pads()
+            self._tello.set_mission_pad_detection_direction(0)  # downward, 20Hz
+        except Exception:
+            logger.warning("Mission pad enablement failed — pad detection unavailable")
+
+        return {"status": "ok"}
 
     def disconnect(self) -> None:
         """Disconnect from the drone."""
@@ -58,6 +66,28 @@ class DroneAdapter:
             self._tello.end()
             self._connected = False
             logger.info("Drone disconnected")
+
+    def keepalive(self) -> None:
+        """Send keepalive to prevent 15-second auto-land timeout."""
+        if self._connected:
+            self._tello.send_keepalive()
+
+    def set_pad_detection_direction(self, direction: int = 0) -> dict:
+        """Set mission pad detection direction.
+
+        Args:
+            direction: 0 = downward only (20Hz),
+                       1 = forward only (20Hz),
+                       2 = both (10Hz each, alternating).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.set_mission_pad_detection_direction(direction)
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("set_pad_detection_direction failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
 
     def _require_connection(self) -> dict | None:
         """Return error dict if not connected, None if OK."""
@@ -149,12 +179,42 @@ class DroneAdapter:
         """Scan for nearest mission pad.
 
         Returns:
-            Dict with pad_id (int) or -1 if none detected.
+            Dict with pad_id and detection status. When detected,
+            includes x/y/z coordinates (cm) relative to the pad.
+            pad_id values: -2 (detection disabled), -1 (enabled but
+            no pad detected), 1-8 (detected pad ID).
         """
         if err := self._require_connection():
             return err
         pad_id = self._tello.get_mission_pad_id()
-        return {"pad_id": pad_id, "detected": pad_id != -1}
+        if pad_id < 1:
+            return {"pad_id": pad_id, "detected": False}
+        return {
+            "pad_id": pad_id,
+            "detected": True,
+            "x_cm": self._tello.get_mission_pad_distance_x(),
+            "y_cm": self._tello.get_mission_pad_distance_y(),
+            "z_cm": self._tello.get_mission_pad_distance_z(),
+        }
+
+    def go_xyz_speed_mid(self, x: int, y: int, z: int, speed: int, mid: int) -> dict:
+        """Fly to coordinates relative to a mission pad.
+
+        Args:
+            x: -500 to 500 cm (pad-relative X axis).
+            y: -500 to 500 cm (pad-relative Y axis).
+            z: 0 to 500 cm (altitude above pad, must be positive).
+            speed: 10-100 cm/s.
+            mid: Mission pad ID (1-8).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.go_xyz_speed_mid(x, y, z, speed, mid)
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("go_xyz_speed_mid failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
 
     def set_led(self, r: int, g: int, b: int) -> dict:
         """Set expansion board LED color.
@@ -167,23 +227,60 @@ class DroneAdapter:
         if err := self._require_connection():
             return err
         try:
-            self._tello.set_led(r=r, g=g, b=b)
+            self._tello.send_expansion_command(f"led {r} {g} {b}")
             return {"status": "ok"}
         except Exception as e:
             logger.exception("set_led failed")
             return {"error": "COMMAND_FAILED", "detail": str(e)}
 
-    def display_text(self, text: str) -> dict:
-        """Display scrolling text on the 8x8 LED matrix.
+    def display_scroll_text(
+        self, text: str, direction: str = "l", color: str = "r", rate: float = 0.5
+    ) -> dict:
+        """Scroll text on the 8x8 LED matrix.
 
         Args:
-            text: Text to display.
+            text: Text to display (max 70 characters).
+            direction: Scroll direction — l (left), r (right), u (up), d (down).
+            color: Display color — r (red), b (blue), p (purple).
+            rate: Frame rate in Hz (0.1-2.5).
         """
         if err := self._require_connection():
             return err
         try:
-            self._tello.set_display(text)
+            self._tello.send_expansion_command(f"mled {direction} {color} {rate} {text}")
             return {"status": "ok"}
         except Exception as e:
-            logger.exception("display_text failed")
+            logger.exception("display_scroll_text failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
+
+    def display_static_char(self, char: str, color: str = "r") -> dict:
+        """Display a static character on the 8x8 LED matrix.
+
+        Args:
+            char: Single ASCII character or "heart".
+            color: Display color — r (red), b (blue), p (purple).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.send_expansion_command(f"mled s {color} {char}")
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("display_static_char failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
+
+    def display_pattern(self, pattern: str) -> dict:
+        """Display a dot-matrix pattern on the 8x8 LED matrix.
+
+        Args:
+            pattern: Up to 64 characters using r (red), b (blue),
+                     p (purple), 0 (off). Unspecified positions are off.
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.send_expansion_command(f"mled g {pattern}")
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("display_pattern failed")
             return {"error": "COMMAND_FAILED", "detail": str(e)}

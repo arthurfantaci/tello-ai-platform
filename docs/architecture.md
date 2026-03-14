@@ -13,7 +13,7 @@ Shared library consumed by all services. Contains domain models, Redis client ut
 **Hardware abstraction layer.** Exposes drone control as MCP tools that Claude can call directly. Manages the UDP socket connection to the Tello, translates MCP tool calls into Tello SDK commands, and publishes telemetry to Redis streams. Acts as the single point of truth for drone state.
 
 ### `services/tello-navigator`
-**LangGraph mission planner.** Receives high-level mission goals and decomposes them into sequences of primitive drone actions. Uses LangGraph for stateful multi-step planning with checkpointing via Redis. Subscribes to telemetry to inform planning decisions and adapt in-flight.
+**LangGraph mission planner.** Receives mission goals, decomposes into waypoint sequences. Persists in Neo4j, checkpoints via Redis. Returns advisory commands — caller executes against tello-mcp.
 
 ### `services/tello-vision`
 **Computer vision pipeline.** Processes the Tello video stream using OpenCV and optional ML models. Publishes scene analysis results (object detection, room mapping, obstacle positions) to Redis. Feeds the scene graph in Neo4j for spatial memory.
@@ -42,7 +42,7 @@ Shared library consumed by all services. Contains domain models, Redis client ut
 | **Checkpointing** | LangGraph state persistence for tello-navigator |
 | **Semantic cache** | Cache LLM inference results for repeated commands |
 | **Vector index** | Similarity search over scene descriptions (future) |
-| **Rate limiting** | Guard the Tello SDK command rate (max ~100 cmd/s) |
+
 
 ## Recommended Build Order
 
