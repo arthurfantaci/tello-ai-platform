@@ -179,12 +179,42 @@ class DroneAdapter:
         """Scan for nearest mission pad.
 
         Returns:
-            Dict with pad_id (int) or -1 if none detected.
+            Dict with pad_id and detection status. When detected,
+            includes x/y/z coordinates (cm) relative to the pad.
+            pad_id values: -2 (detection disabled), -1 (enabled but
+            no pad detected), 1-8 (detected pad ID).
         """
         if err := self._require_connection():
             return err
         pad_id = self._tello.get_mission_pad_id()
-        return {"pad_id": pad_id, "detected": pad_id != -1}
+        if pad_id < 1:
+            return {"pad_id": pad_id, "detected": False}
+        return {
+            "pad_id": pad_id,
+            "detected": True,
+            "x_cm": self._tello.get_mission_pad_distance_x(),
+            "y_cm": self._tello.get_mission_pad_distance_y(),
+            "z_cm": self._tello.get_mission_pad_distance_z(),
+        }
+
+    def go_xyz_speed_mid(self, x: int, y: int, z: int, speed: int, mid: int) -> dict:
+        """Fly to coordinates relative to a mission pad.
+
+        Args:
+            x: -500 to 500 cm (pad-relative X axis).
+            y: -500 to 500 cm (pad-relative Y axis).
+            z: 0 to 500 cm (altitude above pad, must be positive).
+            speed: 10-100 cm/s.
+            mid: Mission pad ID (1-8).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.go_xyz_speed_mid(x, y, z, speed, mid)
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("go_xyz_speed_mid failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
 
     def set_led(self, r: int, g: int, b: int) -> dict:
         """Set expansion board LED color.

@@ -149,3 +149,39 @@ class TestDroneAdapter:
             result = adapter.set_pad_detection_direction(2)
             mock_drone.set_mission_pad_detection_direction.assert_called_once_with(2)
             assert result["status"] == "ok"
+
+    def test_detect_mission_pad_with_pad(self, mock_drone):
+        mock_drone.get_mission_pad_id.return_value = 3
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.detect_mission_pad()
+            assert result["pad_id"] == 3
+            assert result["detected"] is True
+            assert result["x_cm"] == 10
+            assert result["y_cm"] == 20
+            assert result["z_cm"] == 50
+
+    def test_detect_mission_pad_no_pad(self, mock_drone):
+        mock_drone.get_mission_pad_id.return_value = -1
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.detect_mission_pad()
+            assert result["pad_id"] == -1
+            assert result["detected"] is False
+            assert "x_cm" not in result
+
+    def test_go_xyz_speed_mid(self, mock_drone):
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.go_xyz_speed_mid(0, 0, 50, 30, 1)
+            mock_drone.go_xyz_speed_mid.assert_called_once_with(0, 0, 50, 30, 1)
+            assert result["status"] == "ok"
+
+    def test_go_xyz_speed_mid_when_not_connected(self):
+        with patch("tello_mcp.drone.Tello"):
+            adapter = DroneAdapter()
+            result = adapter.go_xyz_speed_mid(0, 0, 50, 30, 1)
+            assert result["error"] == "DRONE_NOT_CONNECTED"
