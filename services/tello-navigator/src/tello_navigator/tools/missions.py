@@ -37,7 +37,16 @@ def _suggested_command(waypoint: dict) -> dict | None:
     if action == "rotate":
         return {"tool": "rotate", "args": {"degrees": waypoint.get("degrees")}}
     if action == "goto_pad":
-        return {"tool": "detect_mission_pad", "args": {}}
+        return {
+            "tool": "go_to_mission_pad",
+            "args": {
+                "x": 0,
+                "y": 0,
+                "z": 50,
+                "speed": waypoint.get("speed_cm_s", 30),
+                "mid": waypoint.get("pad_id"),
+            },
+        }
     if action == "hover":
         return None
     return None

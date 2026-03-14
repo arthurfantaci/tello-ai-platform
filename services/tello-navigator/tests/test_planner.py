@@ -108,6 +108,21 @@ class TestGenerateWaypoints:
         assert wps[-1]["action"] == "land"
         assert result["current_waypoint_idx"] == 0
 
+    def test_goto_pad_waypoints_include_speed(self, planner):
+        state = _make_state(
+            room_ids=["living"],
+            rooms=[{"id": "living", "depth_cm": 500}],
+            mission_pads=[
+                {"id": 1, "room_id": "living"},
+                {"id": 2, "room_id": "living"},
+            ],
+        )
+        result = planner._generate_waypoints(state)
+        goto_pads = [wp for wp in result["waypoints"] if wp["action"] == "goto_pad"]
+        assert len(goto_pads) > 0
+        for wp in goto_pads:
+            assert wp["speed_cm_s"] == 30
+
     def test_multi_room_with_pads(self, planner):
         state = _make_state(
             room_ids=["living", "kitchen"],

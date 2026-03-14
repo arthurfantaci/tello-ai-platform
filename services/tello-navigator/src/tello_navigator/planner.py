@@ -153,6 +153,7 @@ class MissionPlanner:
                             "room_id": room_id,
                             "pad_id": pad["id"],
                             "action": "goto_pad",
+                            "speed_cm_s": 30,
                         }
                     )
                     seq += 1

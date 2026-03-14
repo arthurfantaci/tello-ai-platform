@@ -9,6 +9,40 @@ import pytest
 from tello_navigator.tools.missions import register
 
 
+class TestSuggestedCommand:
+    def test_goto_pad_maps_to_go_to_mission_pad(self):
+        from tello_navigator.tools.missions import _suggested_command
+
+        waypoint = {
+            "id": "wp_1",
+            "sequence": 1,
+            "room_id": "living",
+            "pad_id": 1,
+            "action": "goto_pad",
+            "speed_cm_s": 30,
+        }
+        result = _suggested_command(waypoint)
+        assert result["tool"] == "go_to_mission_pad"
+        assert result["args"]["mid"] == 1
+        assert result["args"]["speed"] == 30
+        assert result["args"]["z"] == 50
+
+    def test_goto_pad_defaults_speed_when_missing(self):
+        from tello_navigator.tools.missions import _suggested_command
+
+        waypoint = {
+            "id": "wp_1",
+            "sequence": 1,
+            "room_id": "living",
+            "pad_id": 2,
+            "action": "goto_pad",
+        }
+        result = _suggested_command(waypoint)
+        assert result["tool"] == "go_to_mission_pad"
+        assert result["args"]["speed"] == 30
+        assert result["args"]["mid"] == 2
+
+
 class TestCreateMission:
     @pytest.fixture(autouse=True)
     def setup_mcp(self):
@@ -52,6 +86,7 @@ class TestCreateMission:
                     "room_id": "living",
                     "pad_id": 1,
                     "action": "goto_pad",
+                    "speed_cm_s": 30,
                 },
                 {"id": "wp_2", "sequence": 2, "room_id": "living", "action": "land"},
             ],

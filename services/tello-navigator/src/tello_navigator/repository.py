@@ -96,7 +96,8 @@ class MissionRepository:
                         action: $action,
                         direction: $direction,
                         distance_cm: $distance_cm,
-                        degrees: $degrees
+                        degrees: $degrees,
+                        speed_cm_s: $speed_cm_s
                     })<-[:CONTAINS_WAYPOINT {sequence: $sequence}]-(m)
                     """,
                     mission_id=mission_id,
@@ -108,6 +109,7 @@ class MissionRepository:
                     direction=wp.direction,
                     distance_cm=wp.distance_cm,
                     degrees=wp.degrees,
+                    speed_cm_s=wp.speed_cm_s,
                 )
         logger.info(
             "Saved %d waypoints for mission %s",
