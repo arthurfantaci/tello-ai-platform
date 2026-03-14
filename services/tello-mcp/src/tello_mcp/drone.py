@@ -47,10 +47,18 @@ class DroneAdapter:
             self._tello.connect()
             self._connected = True
             logger.info("Drone connected, battery=%d%%", self._tello.get_battery())
-            return {"status": "ok"}
         except Exception as e:
             logger.exception("Failed to connect to drone")
             return {"error": "CONNECTION_FAILED", "detail": str(e)}
+
+        # Best-effort pad enablement — warn on failure, don't kill connection
+        try:
+            self._tello.enable_mission_pads()
+            self._tello.set_mission_pad_detection_direction(0)  # downward, 20Hz
+        except Exception:
+            logger.warning("Mission pad enablement failed — pad detection unavailable")
+
+        return {"status": "ok"}
 
     def disconnect(self) -> None:
         """Disconnect from the drone."""
@@ -58,6 +66,28 @@ class DroneAdapter:
             self._tello.end()
             self._connected = False
             logger.info("Drone disconnected")
+
+    def keepalive(self) -> None:
+        """Send keepalive to prevent 15-second auto-land timeout."""
+        if self._connected:
+            self._tello.send_keepalive()
+
+    def set_pad_detection_direction(self, direction: int = 0) -> dict:
+        """Set mission pad detection direction.
+
+        Args:
+            direction: 0 = downward only (20Hz),
+                       1 = forward only (20Hz),
+                       2 = both (10Hz each, alternating).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.set_mission_pad_detection_direction(direction)
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("set_pad_detection_direction failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
 
     def _require_connection(self) -> dict | None:
         """Return error dict if not connected, None if OK."""

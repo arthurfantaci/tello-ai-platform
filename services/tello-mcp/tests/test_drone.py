@@ -112,3 +112,40 @@ class TestDroneAdapter:
         with patch("tello_mcp.drone.Tello", return_value=mock_drone) as mock_cls:
             DroneAdapter(host="192.168.68.107")
             mock_cls.assert_called_once_with(host="192.168.68.107")
+
+    def test_connect_enables_mission_pads(self, mock_drone):
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            mock_drone.enable_mission_pads.assert_called_once()
+            mock_drone.set_mission_pad_detection_direction.assert_called_once_with(0)
+
+    def test_connect_succeeds_if_pad_enable_fails(self, mock_drone):
+        mock_drone.enable_mission_pads.side_effect = Exception("pad error")
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            result = adapter.connect()
+            assert result["status"] == "ok"
+            assert adapter.is_connected
+
+    def test_keepalive(self, mock_drone):
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            adapter.keepalive()
+            mock_drone.send_keepalive.assert_called_once()
+
+    def test_keepalive_when_not_connected(self):
+        with patch("tello_mcp.drone.Tello"):
+            adapter = DroneAdapter()
+            adapter.keepalive()  # should not raise
+
+    def test_set_pad_detection_direction(self, mock_drone):
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            # Reset after connect() which calls set_mission_pad_detection_direction(0)
+            mock_drone.set_mission_pad_detection_direction.reset_mock()
+            result = adapter.set_pad_detection_direction(2)
+            mock_drone.set_mission_pad_detection_direction.assert_called_once_with(2)
+            assert result["status"] == "ok"

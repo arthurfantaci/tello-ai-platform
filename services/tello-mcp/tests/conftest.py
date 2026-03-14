@@ -45,6 +45,15 @@ def mock_drone():
     drone.get_yaw = MagicMock(return_value=180)
     drone.get_flight_time = MagicMock(return_value=45)
     drone.get_mission_pad_id = MagicMock(return_value=-1)
+    drone.enable_mission_pads = MagicMock()
+    drone.disable_mission_pads = MagicMock()
+    drone.set_mission_pad_detection_direction = MagicMock()
+    drone.send_keepalive = MagicMock()
+    drone.go_xyz_speed_mid = MagicMock()
+    drone.send_expansion_command = MagicMock()
+    drone.get_mission_pad_distance_x = MagicMock(return_value=10)
+    drone.get_mission_pad_distance_y = MagicMock(return_value=20)
+    drone.get_mission_pad_distance_z = MagicMock(return_value=50)
     return drone
 
 
