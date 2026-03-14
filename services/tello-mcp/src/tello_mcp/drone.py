@@ -167,23 +167,60 @@ class DroneAdapter:
         if err := self._require_connection():
             return err
         try:
-            self._tello.set_led(r=r, g=g, b=b)
+            self._tello.send_expansion_command(f"led {r} {g} {b}")
             return {"status": "ok"}
         except Exception as e:
             logger.exception("set_led failed")
             return {"error": "COMMAND_FAILED", "detail": str(e)}
 
-    def display_text(self, text: str) -> dict:
-        """Display scrolling text on the 8x8 LED matrix.
+    def display_scroll_text(
+        self, text: str, direction: str = "l", color: str = "r", rate: float = 0.5
+    ) -> dict:
+        """Scroll text on the 8x8 LED matrix.
 
         Args:
-            text: Text to display.
+            text: Text to display (max 70 characters).
+            direction: Scroll direction — l (left), r (right), u (up), d (down).
+            color: Display color — r (red), b (blue), p (purple).
+            rate: Frame rate in Hz (0.1-2.5).
         """
         if err := self._require_connection():
             return err
         try:
-            self._tello.set_display(text)
+            self._tello.send_expansion_command(f"mled {direction} {color} {rate} {text}")
             return {"status": "ok"}
         except Exception as e:
-            logger.exception("display_text failed")
+            logger.exception("display_scroll_text failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
+
+    def display_static_char(self, char: str, color: str = "r") -> dict:
+        """Display a static character on the 8x8 LED matrix.
+
+        Args:
+            char: Single ASCII character or "heart".
+            color: Display color — r (red), b (blue), p (purple).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.send_expansion_command(f"mled s {color} {char}")
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("display_static_char failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
+
+    def display_pattern(self, pattern: str) -> dict:
+        """Display a dot-matrix pattern on the 8x8 LED matrix.
+
+        Args:
+            pattern: Up to 64 characters using r (red), b (blue),
+                     p (purple), 0 (off). Unspecified positions are off.
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            self._tello.send_expansion_command(f"mled g {pattern}")
+            return {"status": "ok"}
+        except Exception as e:
+            logger.exception("display_pattern failed")
             return {"error": "COMMAND_FAILED", "detail": str(e)}
