@@ -70,6 +70,7 @@ class Waypoint(BaseModel):
     direction: Literal["up", "down", "left", "right", "forward", "back"] | None = None
     distance_cm: int | None = Field(default=None, ge=20, le=500)
     degrees: int | None = Field(default=None, ge=-360, le=360)
+    speed_cm_s: int | None = Field(default=None, ge=10, le=100)
 
 
 class MissionStatus(StrEnum):

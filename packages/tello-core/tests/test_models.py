@@ -231,6 +231,46 @@ class TestWaypoint:
         restored = Waypoint.model_validate(data)
         assert restored == wp
 
+    def test_waypoint_with_speed(self):
+        wp = Waypoint(
+            id="wp1",
+            sequence=0,
+            room_id="living",
+            action="goto_pad",
+            pad_id=1,
+            speed_cm_s=30,
+        )
+        assert wp.speed_cm_s == 30
+
+    def test_waypoint_speed_bounds(self):
+        with pytest.raises(ValidationError):
+            Waypoint(
+                id="wp1",
+                sequence=0,
+                room_id="living",
+                action="goto_pad",
+                speed_cm_s=5,  # below 10
+            )
+        with pytest.raises(ValidationError):
+            Waypoint(
+                id="wp1",
+                sequence=0,
+                room_id="living",
+                action="goto_pad",
+                speed_cm_s=200,  # above 100
+            )
+
+    def test_waypoint_speed_optional(self):
+        wp = Waypoint(
+            id="wp1",
+            sequence=0,
+            room_id="living",
+            action="move",
+            direction="forward",
+            distance_cm=100,
+        )
+        assert wp.speed_cm_s is None
+
 
 class TestMissionStatus:
     def test_enum_values(self):
