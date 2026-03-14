@@ -89,6 +89,23 @@ class TestSaveWaypoints:
         assert params["wp_id"] == "wp-1"
         assert params["sequence"] == 0
 
+    def test_saves_speed_cm_s_for_goto_pad(self, repo, mock_session):
+        from tello_core.models import Waypoint
+
+        wp = Waypoint(
+            id="wp-1",
+            sequence=0,
+            room_id="living_room",
+            pad_id=1,
+            action="goto_pad",
+            speed_cm_s=30,
+        )
+        repo.save_waypoints("mission-1", [wp])
+        cypher = mock_session.run.call_args_list[0][0][0]
+        assert "speed_cm_s" in cypher
+        params = mock_session.run.call_args_list[0][1]
+        assert params["speed_cm_s"] == 30
+
 
 class TestUpdateMissionStatus:
     def test_updates_status(self, repo, mock_session):
