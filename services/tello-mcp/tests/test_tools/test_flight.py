@@ -56,6 +56,24 @@ class TestFlightTools:
     def test_rotate_registered(self):
         assert "rotate" in self.registered_tools
 
+    def test_go_to_mission_pad_registered(self):
+        assert "go_to_mission_pad" in self.registered_tools
+
+    async def test_go_to_mission_pad_calls_drone(self):
+        mock_queue = AsyncMock()
+        mock_queue.enqueue = AsyncMock(return_value={"status": "ok"})
+        ctx = self._make_ctx(queue=mock_queue)
+        result = await self.registered_tools["go_to_mission_pad"](
+            ctx,
+            x=0,
+            y=0,
+            z=50,
+            speed=30,
+            mid=1,
+        )
+        mock_queue.enqueue.assert_called_once()
+        assert result["status"] == "ok"
+
     async def test_takeoff_publishes_room_id(self):
         """Takeoff tool publishes room_id in the stream event."""
         mock_queue = AsyncMock()
