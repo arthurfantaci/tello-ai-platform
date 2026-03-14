@@ -7,7 +7,8 @@ Run:
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING
 
 from fastmcp import FastMCP
@@ -22,6 +23,14 @@ from tello_mcp.tools import expansion, flight, sensors
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+
+async def _keepalive_loop(drone: DroneAdapter) -> None:
+    """Send keepalive every 10s to prevent 15s auto-land timeout."""
+    while True:
+        await asyncio.sleep(10)
+        if drone.is_connected:
+            await asyncio.to_thread(drone.keepalive)
 
 
 @asynccontextmanager
@@ -42,6 +51,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
         stream=config.events_stream,
     )
 
+    keepalive_task = asyncio.create_task(_keepalive_loop(drone))
     try:
         yield {
             "drone": drone,
@@ -51,6 +61,9 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
             "config": config,
         }
     finally:
+        keepalive_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await keepalive_task
         drone.disconnect()
         await redis.aclose()
 
