@@ -1,6 +1,7 @@
 """Find the Tello TT on your local network after Router Mode setup.
 
 Scans common local subnets for the Tello's UDP command port (8889).
+Uses the shared discovery module from tello_mcp.
 
 Usage:
     uv run python scripts/find_drone.py
@@ -9,51 +10,13 @@ Usage:
 from __future__ import annotations
 
 import re
-import socket
-import subprocess
 import sys
 from pathlib import Path
 
+from tello_mcp.discovery import discover_tello, get_local_subnet
+
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 ENV_EXAMPLE = Path(__file__).resolve().parent.parent / ".env.example"
-
-
-def get_local_subnet() -> str | None:
-    """Get the local subnet from the default route interface."""
-    try:
-        result = subprocess.run(
-            ["/usr/sbin/ipconfig", "getifaddr", "en0"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        ip = result.stdout.strip()
-        # Return the /24 subnet prefix
-        return ".".join(ip.split(".")[:3])
-    except (subprocess.CalledProcessError, IndexError):
-        return None
-
-
-def scan_for_tello(subnet: str) -> str | None:
-    """Scan subnet for a Tello responding on UDP 8889."""
-    print(f"Scanning {subnet}.0/24 for Tello TT...")
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(0.3)
-
-    for i in range(1, 255):
-        ip = f"{subnet}.{i}"
-        try:
-            sock.sendto(b"command", (ip, 8889))
-            response, addr = sock.recvfrom(1024)
-            if response.decode().strip() == "ok":
-                sock.close()
-                return addr[0]
-        except (TimeoutError, OSError):
-            continue
-
-    sock.close()
-    return None
 
 
 def update_env_file(ip: str) -> None:
@@ -103,7 +66,8 @@ def main() -> None:
     print(f"Local subnet: {subnet}.0/24")
     print()
 
-    drone_ip = scan_for_tello(subnet)
+    # Full range scan (1-254) for standalone script; discovery module uses 100-200
+    drone_ip = discover_tello(subnet=subnet, timeout_per_host=0.3, range_start=1, range_end=254)
     if drone_ip:
         print(f"\nFound Tello TT at: {drone_ip}")
         update_env_file(drone_ip)

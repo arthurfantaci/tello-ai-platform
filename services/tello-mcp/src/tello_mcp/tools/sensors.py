@@ -18,15 +18,19 @@ def register(mcp: FastMCP) -> None:
     async def get_telemetry(ctx: Context) -> dict:
         """Get current telemetry: battery, height, ToF, attitude, temp, flight time."""
         drone = ctx.lifespan_context["drone"]
-        frame = drone.get_telemetry()
-        return frame.model_dump()
+        result = drone.get_telemetry()
+        if isinstance(result, dict):
+            return result
+        return result.model_dump()
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
     async def get_tof_distance(ctx: Context) -> dict:
         """Get Time-of-Flight distance sensor reading in cm."""
         drone = ctx.lifespan_context["drone"]
-        frame = drone.get_telemetry()
-        return {"tof_cm": frame.tof_cm}
+        result = drone.get_telemetry()
+        if isinstance(result, dict):
+            return result
+        return {"tof_cm": result.tof_cm}
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
     async def detect_mission_pad(ctx: Context) -> dict:

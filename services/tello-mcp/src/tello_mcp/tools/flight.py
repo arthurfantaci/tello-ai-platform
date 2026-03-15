@@ -24,7 +24,7 @@ def register(mcp: FastMCP) -> None:
         drone = ctx.lifespan_context["drone"]
         queue = ctx.lifespan_context["queue"]
         telemetry = ctx.lifespan_context["telemetry"]
-        result = await queue.enqueue(drone.takeoff)
+        result = await queue.enqueue(drone.takeoff, heavy=True)
         await telemetry.publish_event("takeoff", {"room_id": room_id})
         return result
 
@@ -33,7 +33,7 @@ def register(mcp: FastMCP) -> None:
         """Land the drone safely."""
         drone = ctx.lifespan_context["drone"]
         queue = ctx.lifespan_context["queue"]
-        return await queue.enqueue(drone.land)
+        return await queue.enqueue(drone.safe_land)
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
     async def emergency_stop(ctx: Context) -> dict:

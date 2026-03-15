@@ -18,25 +18,38 @@ logger = structlog.get_logger("tello_mcp.queue")
 
 
 class CommandQueue:
-    """Serializes drone commands through an asyncio.Queue."""
+    """Serializes drone commands through an asyncio.Queue.
 
-    def __init__(self, maxsize: int = 100) -> None:
-        self._queue: asyncio.Queue[tuple[Callable, asyncio.Future]] = asyncio.Queue(
-            maxsize=maxsize,
+    Enforces inter-command delays to prevent "Not joystick" errors.
+    Normal commands get ``post_delay_s`` (default 0.5s); heavy commands
+    like takeoff get ``heavy_delay_s`` (default 3.0s).
+    """
+
+    def __init__(
+        self,
+        maxsize: int = 100,
+        post_delay_s: float = 0.5,
+        heavy_delay_s: float = 3.0,
+    ) -> None:
+        self._queue: asyncio.Queue[tuple[Callable, asyncio.Future, bool]] = asyncio.Queue(
+            maxsize=maxsize
         )
         self._running = False
+        self.post_delay_s = post_delay_s
+        self.heavy_delay_s = heavy_delay_s
 
-    async def enqueue(self, command: Callable[[], Any]) -> dict:
+    async def enqueue(self, command: Callable[[], Any], *, heavy: bool = False) -> dict:
         """Add a command to the queue and wait for its result.
 
         Args:
             command: A callable (sync) that returns a result dict.
+            heavy: If True, use longer post-command delay (e.g. takeoff).
 
         Returns:
             The command's return value, or an error dict if it raised.
         """
         future: asyncio.Future[dict] = asyncio.get_running_loop().create_future()
-        await self._queue.put((command, future))
+        await self._queue.put((command, future, heavy))
         return await future
 
     async def start(self) -> None:
@@ -45,7 +58,7 @@ class CommandQueue:
         logger.info("Command queue consumer started")
         while self._running:
             try:
-                command, future = await asyncio.wait_for(
+                command, future, heavy = await asyncio.wait_for(
                     self._queue.get(),
                     timeout=1.0,
                 )
@@ -60,6 +73,9 @@ class CommandQueue:
                 future.set_result({"error": "COMMAND_FAILED", "detail": str(e)})
             finally:
                 self._queue.task_done()
+
+            delay = self.heavy_delay_s if heavy else self.post_delay_s
+            await asyncio.sleep(delay)
 
     async def stop(self) -> None:
         """Stop the command consumer loop."""

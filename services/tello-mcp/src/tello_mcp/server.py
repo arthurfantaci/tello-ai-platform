@@ -19,7 +19,7 @@ from tello_mcp.config import TelloMcpConfig
 from tello_mcp.drone import DroneAdapter
 from tello_mcp.queue import CommandQueue
 from tello_mcp.telemetry import TelemetryPublisher
-from tello_mcp.tools import expansion, flight, sensors
+from tello_mcp.tools import connection, expansion, flight, sensors
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -51,6 +51,19 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
         stream=config.events_stream,
     )
 
+    # Start queue consumer — without this, all enqueue() calls hang forever
+    queue_task = asyncio.create_task(queue.start())
+
+    # Best-effort auto-connect — warn on failure, don't block startup
+    result = drone.connect()
+    if "error" in result:
+        import structlog
+
+        structlog.get_logger("tello_mcp.server").warning(
+            "Auto-connect failed — use connect_drone tool to retry",
+            detail=result.get("detail"),
+        )
+
     keepalive_task = asyncio.create_task(_keepalive_loop(drone))
     try:
         yield {
@@ -64,6 +77,10 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
         keepalive_task.cancel()
         with suppress(asyncio.CancelledError):
             await keepalive_task
+        await queue.stop()
+        queue_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await queue_task
         drone.disconnect()
         await redis.aclose()
 
@@ -79,6 +96,7 @@ mcp = FastMCP(
 )
 
 # Register tool modules
+connection.register(mcp)
 flight.register(mcp)
 sensors.register(mcp)
 expansion.register(mcp)
