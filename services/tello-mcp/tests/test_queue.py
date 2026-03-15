@@ -1,6 +1,7 @@
 """Tests for the async command queue."""
 
 import asyncio
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -10,7 +11,8 @@ from tello_mcp.queue import CommandQueue
 class TestCommandQueue:
     @pytest.fixture()
     def queue(self):
-        return CommandQueue()
+        # Zero delays for fast tests
+        return CommandQueue(post_delay_s=0.0, heavy_delay_s=0.0)
 
     async def test_enqueue_and_execute(self, queue):
         called = False
@@ -64,3 +66,32 @@ class TestCommandQueue:
         finally:
             await queue.stop()
             consumer_task.cancel()
+
+    async def test_post_delay_applied(self):
+        queue = CommandQueue(post_delay_s=0.5, heavy_delay_s=3.0)
+        mock_sleep = AsyncMock()
+        consumer_task = asyncio.create_task(queue.start())
+        try:
+            with patch("tello_mcp.queue.asyncio.sleep", mock_sleep):
+                await queue.enqueue(lambda: {"status": "ok"})
+            mock_sleep.assert_called_once_with(0.5)
+        finally:
+            await queue.stop()
+            consumer_task.cancel()
+
+    async def test_heavy_delay_applied(self):
+        queue = CommandQueue(post_delay_s=0.5, heavy_delay_s=3.0)
+        mock_sleep = AsyncMock()
+        consumer_task = asyncio.create_task(queue.start())
+        try:
+            with patch("tello_mcp.queue.asyncio.sleep", mock_sleep):
+                await queue.enqueue(lambda: {"status": "ok"}, heavy=True)
+            mock_sleep.assert_called_once_with(3.0)
+        finally:
+            await queue.stop()
+            consumer_task.cancel()
+
+    async def test_default_delays(self):
+        queue = CommandQueue()
+        assert queue.post_delay_s == 0.5
+        assert queue.heavy_delay_s == 3.0

@@ -108,6 +108,40 @@ class TestDroneAdapter:
             result = adapter.display_scroll_text("hi")
             assert result["error"] == "DRONE_NOT_CONNECTED"
 
+    def test_safe_land_success(self, mock_drone):
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.safe_land()
+            mock_drone.land.assert_called_once()
+            assert result["status"] == "ok"
+            assert "warning" not in result
+
+    def test_safe_land_falls_back_to_emergency(self, mock_drone):
+        mock_drone.land.side_effect = Exception("land rejected")
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.safe_land()
+            mock_drone.emergency.assert_called_once()
+            assert result["status"] == "ok"
+            assert "emergency" in result["warning"].lower()
+
+    def test_safe_land_both_fail(self, mock_drone):
+        mock_drone.land.side_effect = Exception("land rejected")
+        mock_drone.emergency.side_effect = Exception("motor fault")
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.safe_land()
+            assert result["error"] == "LAND_FAILED"
+
+    def test_safe_land_when_not_connected(self):
+        with patch("tello_mcp.drone.Tello"):
+            adapter = DroneAdapter()
+            result = adapter.safe_land()
+            assert result["error"] == "DRONE_NOT_CONNECTED"
+
     def test_host_parameter(self, mock_drone):
         with patch("tello_mcp.drone.Tello", return_value=mock_drone) as mock_cls:
             DroneAdapter(host="192.168.68.107")
