@@ -33,6 +33,33 @@ class TelemetryFrame(BaseModel):
     yaw: float
     flight_time_s: int
     timestamp: datetime
+    forward_tof_mm: int | None = None
+
+
+# ── Obstacle Detection ───────────────────────────────────────────────
+
+
+class ObstacleZone(StrEnum):
+    """Tiered obstacle detection zones."""
+
+    CLEAR = "clear"
+    CAUTION = "caution"
+    WARNING = "warning"
+    DANGER = "danger"
+
+
+class ObstacleReading(BaseModel):
+    """Interpreted forward ToF sensor reading with zone classification.
+
+    Phase 5 extension: classification and confidence fields
+    allow vision enrichment without model changes.
+    """
+
+    distance_mm: int
+    zone: ObstacleZone
+    timestamp: datetime
+    classification: str | None = None
+    confidence: float | None = None
 
 
 # ── Navigation Layer ──────────────────────────────────────────────────

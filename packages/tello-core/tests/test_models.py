@@ -13,6 +13,8 @@ from tello_core.models import (
     Mission,
     MissionPad,
     MissionStatus,
+    ObstacleReading,
+    ObstacleZone,
     RoomNode,
     TelemetryFrame,
     TelemetrySample,
@@ -74,6 +76,50 @@ class TestTelemetryFrame:
         data = frame.model_dump()
         restored = TelemetryFrame.model_validate(data)
         assert restored == frame
+
+    def test_forward_tof_mm_defaults_to_none(self):
+        frame = TelemetryFrame(
+            battery_pct=85,
+            height_cm=120,
+            tof_cm=95,
+            temp_c=42.5,
+            pitch=1.2,
+            roll=-0.5,
+            yaw=180.0,
+            flight_time_s=45,
+            timestamp=datetime(2026, 3, 12, 10, 0, 0),
+        )
+        assert frame.forward_tof_mm is None
+
+    def test_forward_tof_mm_with_value(self):
+        frame = TelemetryFrame(
+            battery_pct=85,
+            height_cm=120,
+            tof_cm=95,
+            temp_c=42.5,
+            pitch=1.2,
+            roll=-0.5,
+            yaw=180.0,
+            flight_time_s=45,
+            timestamp=datetime(2026, 3, 12, 10, 0, 0),
+            forward_tof_mm=1250,
+        )
+        assert frame.forward_tof_mm == 1250
+
+    def test_forward_tof_mm_out_of_range_value(self):
+        frame = TelemetryFrame(
+            battery_pct=85,
+            height_cm=120,
+            tof_cm=95,
+            temp_c=42.5,
+            pitch=1.2,
+            roll=-0.5,
+            yaw=180.0,
+            flight_time_s=45,
+            timestamp=datetime(2026, 3, 12, 10, 0, 0),
+            forward_tof_mm=8192,
+        )
+        assert frame.forward_tof_mm == 8192
 
 
 class TestRoomNode:
@@ -338,6 +384,53 @@ class TestMission:
         restored = Mission.model_validate(data)
         assert restored == mission
         assert restored.waypoints[0].distance_cm == 100
+
+
+class TestObstacleZone:
+    def test_zone_values(self):
+        assert ObstacleZone.CLEAR == "clear"
+        assert ObstacleZone.CAUTION == "caution"
+        assert ObstacleZone.WARNING == "warning"
+        assert ObstacleZone.DANGER == "danger"
+
+    def test_zone_is_str_enum(self):
+        assert isinstance(ObstacleZone.DANGER, str)
+
+
+class TestObstacleReading:
+    def test_valid_reading(self):
+        reading = ObstacleReading(
+            distance_mm=450,
+            zone=ObstacleZone.WARNING,
+            timestamp=datetime(2026, 3, 16, 14, 0, 0),
+        )
+        assert reading.distance_mm == 450
+        assert reading.zone == ObstacleZone.WARNING
+        assert reading.classification is None
+        assert reading.confidence is None
+
+    def test_with_classification(self):
+        reading = ObstacleReading(
+            distance_mm=300,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 16, 14, 0, 0),
+            classification="person",
+            confidence=0.92,
+        )
+        assert reading.classification == "person"
+        assert reading.confidence == 0.92
+
+    def test_serialization_roundtrip(self):
+        reading = ObstacleReading(
+            distance_mm=1200,
+            zone=ObstacleZone.CAUTION,
+            timestamp=datetime(2026, 3, 16, 14, 0, 0),
+        )
+        data = reading.model_dump()
+        assert data["zone"] == "caution"
+        assert data["distance_mm"] == 1200
+        restored = ObstacleReading.model_validate(data)
+        assert restored == reading
 
 
 class TestDwelling:
