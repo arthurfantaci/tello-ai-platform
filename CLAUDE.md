@@ -28,7 +28,10 @@ uv run --package tello-mcp python -m tello_mcp.server --transport streamable-htt
 # Testing
 uv run --package tello-core pytest packages/tello-core/tests/ -v    # tello-core tests
 uv run --package tello-mcp pytest services/tello-mcp/tests/ -v      # tello-mcp tests
-uv run pytest packages/ services/ -v                                 # all tests
+uv run --package tello-navigator pytest services/tello-navigator/tests/ -v  # tello-navigator tests
+uv run --package tello-telemetry pytest services/tello-telemetry/tests/ -v  # tello-telemetry tests
+# NOTE: no flat "uv run pytest packages/ services/" command — uv workspaces
+# require --package to resolve each service's dependencies correctly.
 
 # Lint & Format
 uv run ruff check .             # lint
