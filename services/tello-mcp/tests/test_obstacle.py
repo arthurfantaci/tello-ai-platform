@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
 
-from tello_core.models import ObstacleZone
+from tello_core.models import ObstacleReading, ObstacleZone
 from tello_mcp.obstacle import (
+    CLIResponseProvider,
     ObstacleConfig,
     ObstacleMonitor,
     ObstacleResponse,
@@ -218,3 +220,39 @@ class TestObstacleResponseHandler:
         handler = ObstacleResponseHandler(drone)
         result = await handler.execute(ObstacleResponse.AVOID_AND_CONTINUE)
         assert result["error"] == "NOT_IMPLEMENTED"
+
+
+class TestCLIResponseProvider:
+    async def test_present_options_emergency_land(self, monkeypatch):
+        provider = CLIResponseProvider()
+        reading = ObstacleReading(
+            distance_mm=350,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 16, 14, 0, 0),
+        )
+        monkeypatch.setattr("builtins.input", lambda _: "1")
+        choice = await provider.present_options(reading)
+        assert choice == ObstacleResponse.EMERGENCY_LAND
+
+    async def test_present_options_manual_override(self, monkeypatch):
+        provider = CLIResponseProvider()
+        reading = ObstacleReading(
+            distance_mm=350,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 16, 14, 0, 0),
+        )
+        monkeypatch.setattr("builtins.input", lambda _: "4")
+        choice = await provider.present_options(reading)
+        assert choice == ObstacleResponse.MANUAL_OVERRIDE
+
+    async def test_present_options_invalid_then_valid(self, monkeypatch):
+        provider = CLIResponseProvider()
+        reading = ObstacleReading(
+            distance_mm=350,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 16, 14, 0, 0),
+        )
+        inputs = iter(["invalid", "0", "5", "2"])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+        choice = await provider.present_options(reading)
+        assert choice == ObstacleResponse.RETURN_TO_HOME

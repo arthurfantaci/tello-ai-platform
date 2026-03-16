@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 
 import structlog
 
@@ -191,3 +191,51 @@ class ObstacleResponseHandler:
             case ObstacleResponse.MANUAL_OVERRIDE:
                 logger.info("obstacle.manual_override")
                 return {"status": "ok", "detail": "Manual control resumed"}
+
+
+@runtime_checkable
+class ResponseProvider(Protocol):
+    """How obstacle options are presented to the caller.
+
+    Phase 4a: CLIResponseProvider (fly.py).
+    Phase 6: VoiceResponseProvider (verbal options).
+    """
+
+    async def present_options(self, reading: ObstacleReading) -> ObstacleResponse:
+        """Present obstacle response options and return the user's choice."""
+        ...
+
+
+class CLIResponseProvider:
+    """Present obstacle response options in a terminal/CLI."""
+
+    _OPTIONS: ClassVar[list[tuple[ObstacleResponse, str]]] = [
+        (ObstacleResponse.EMERGENCY_LAND, "Emergency Landing -- land immediately"),
+        (
+            ObstacleResponse.RETURN_TO_HOME,
+            "Return to Home -- navigate back to launch pad (Phase 4b)",
+        ),
+        (
+            ObstacleResponse.AVOID_AND_CONTINUE,
+            "Avoid & Continue -- dodge obstacle, resume mission (Phase 4b)",
+        ),
+        (ObstacleResponse.MANUAL_OVERRIDE, "Manual Override -- resume manual control"),
+    ]
+
+    async def present_options(self, reading: ObstacleReading) -> ObstacleResponse:
+        """Print options and read user choice from stdin."""
+        print(f"\nOBSTACLE DETECTED: {reading.distance_mm}mm ({reading.zone.value})")
+        print("Drone has been stopped. Choose a response:\n")
+        for i, (_, label) in enumerate(self._OPTIONS, 1):
+            print(f"  {i}. {label}")
+        print()
+
+        while True:
+            try:
+                raw = input("Select (1-4): ").strip()
+                idx = int(raw) - 1
+                if 0 <= idx < len(self._OPTIONS):
+                    return self._OPTIONS[idx][0]
+            except (ValueError, EOFError):
+                pass
+            print("Invalid selection. Enter 1-4.")
