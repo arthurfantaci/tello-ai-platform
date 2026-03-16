@@ -17,6 +17,7 @@ from tello_core.config import configure_structlog
 from tello_core.redis_client import create_redis_client
 from tello_mcp.config import TelloMcpConfig
 from tello_mcp.drone import DroneAdapter
+from tello_mcp.obstacle import ObstacleConfig, ObstacleMonitor
 from tello_mcp.queue import CommandQueue
 from tello_mcp.telemetry import TelemetryPublisher
 from tello_mcp.tools import connection, expansion, flight, sensors
@@ -45,6 +46,8 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
     redis = create_redis_client(config.redis_url)
     drone = DroneAdapter(host=config.tello_host)
     queue = CommandQueue()
+    obstacle_config = ObstacleConfig.from_env()
+    monitor = ObstacleMonitor(drone, obstacle_config)
     telemetry = TelemetryPublisher(
         redis_client=redis,
         channel=config.telemetry_channel,
@@ -65,6 +68,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
         )
 
     keepalive_task = asyncio.create_task(_keepalive_loop(drone))
+    await monitor.start()
     try:
         yield {
             "drone": drone,
@@ -72,8 +76,10 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
             "redis": redis,
             "telemetry": telemetry,
             "config": config,
+            "monitor": monitor,
         }
     finally:
+        await monitor.stop()
         keepalive_task.cancel()
         with suppress(asyncio.CancelledError):
             await keepalive_task
