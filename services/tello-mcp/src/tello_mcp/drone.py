@@ -254,6 +254,25 @@ class DroneAdapter:
             logger.exception("go_xyz_speed_mid failed")
             return {"error": "COMMAND_FAILED", "detail": str(e)}
 
+    def get_forward_distance(self) -> dict:
+        """Query the forward-facing ToF sensor on the Dot-Matrix Module.
+
+        Returns distance in mm, or 8192 if out of range.
+        Uses EXT tof? command via the Open-Source Controller (ESP32).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            response = self._tello.send_expansion_command("tof?")
+            distance_mm = int(response)
+            return {"status": "ok", "distance_mm": distance_mm}
+        except (ValueError, TypeError):
+            logger.exception("forward_tof.parse_failed", response=response)
+            return {"error": "PARSE_ERROR", "detail": f"Unexpected response: {response}"}
+        except Exception as e:
+            logger.exception("forward_tof.query_failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
+
     def set_led(self, r: int, g: int, b: int) -> dict:
         """Set expansion board LED color.
 

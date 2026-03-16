@@ -219,3 +219,47 @@ class TestDroneAdapter:
             adapter = DroneAdapter()
             result = adapter.go_xyz_speed_mid(0, 0, 50, 30, 1)
             assert result["error"] == "DRONE_NOT_CONNECTED"
+
+    def test_get_forward_distance_success(self, mock_drone):
+        mock_drone.send_expansion_command.return_value = "1245"
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            # Reset mock from connect() expansion calls
+            mock_drone.send_expansion_command.reset_mock()
+            result = adapter.get_forward_distance()
+            mock_drone.send_expansion_command.assert_called_once_with("tof?")
+            assert result["status"] == "ok"
+            assert result["distance_mm"] == 1245
+
+    def test_get_forward_distance_out_of_range(self, mock_drone):
+        mock_drone.send_expansion_command.return_value = "8192"
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            mock_drone.send_expansion_command.reset_mock()
+            result = adapter.get_forward_distance()
+            assert result["status"] == "ok"
+            assert result["distance_mm"] == 8192
+
+    def test_get_forward_distance_parse_error(self, mock_drone):
+        mock_drone.send_expansion_command.return_value = "error"
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.get_forward_distance()
+            assert result["error"] == "PARSE_ERROR"
+
+    def test_get_forward_distance_command_failed(self, mock_drone):
+        mock_drone.send_expansion_command.side_effect = Exception("timeout")
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            result = adapter.get_forward_distance()
+            assert result["error"] == "COMMAND_FAILED"
+
+    def test_get_forward_distance_when_not_connected(self):
+        with patch("tello_mcp.drone.Tello"):
+            adapter = DroneAdapter()
+            result = adapter.get_forward_distance()
+            assert result["error"] == "DRONE_NOT_CONNECTED"
