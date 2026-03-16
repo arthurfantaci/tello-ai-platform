@@ -8,7 +8,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from tello_core.models import ObstacleZone
-from tello_mcp.obstacle import ObstacleConfig, ObstacleMonitor
+from tello_mcp.obstacle import (
+    ObstacleConfig,
+    ObstacleMonitor,
+    ObstacleResponse,
+    ObstacleResponseHandler,
+)
 
 
 class TestObstacleConfig:
@@ -177,3 +182,39 @@ class TestObstacleMonitorPolling:
         await monitor.stop()
         assert len(readings) > 0
         assert readings[0].distance_mm == 600
+
+
+class TestObstacleResponse:
+    def test_response_values(self):
+        assert ObstacleResponse.EMERGENCY_LAND == "emergency_land"
+        assert ObstacleResponse.RETURN_TO_HOME == "return_to_home"
+        assert ObstacleResponse.AVOID_AND_CONTINUE == "avoid_and_continue"
+        assert ObstacleResponse.MANUAL_OVERRIDE == "manual_override"
+
+
+class TestObstacleResponseHandler:
+    async def test_execute_emergency_land(self):
+        drone = MagicMock()
+        drone.safe_land.return_value = {"status": "ok"}
+        handler = ObstacleResponseHandler(drone)
+        result = await handler.execute(ObstacleResponse.EMERGENCY_LAND)
+        drone.safe_land.assert_called_once()
+        assert result["status"] == "ok"
+
+    async def test_execute_manual_override(self):
+        drone = MagicMock()
+        handler = ObstacleResponseHandler(drone)
+        result = await handler.execute(ObstacleResponse.MANUAL_OVERRIDE)
+        assert result["status"] == "ok"
+
+    async def test_execute_return_to_home_not_implemented(self):
+        drone = MagicMock()
+        handler = ObstacleResponseHandler(drone)
+        result = await handler.execute(ObstacleResponse.RETURN_TO_HOME)
+        assert result["error"] == "NOT_IMPLEMENTED"
+
+    async def test_execute_avoid_and_continue_not_implemented(self):
+        drone = MagicMock()
+        handler = ObstacleResponseHandler(drone)
+        result = await handler.execute(ObstacleResponse.AVOID_AND_CONTINUE)
+        assert result["error"] == "NOT_IMPLEMENTED"

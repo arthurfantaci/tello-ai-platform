@@ -12,6 +12,7 @@ import contextlib
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import structlog
@@ -151,3 +152,42 @@ class ObstacleMonitor:
                         await cb_result
 
             await asyncio.sleep(self._config.poll_interval_ms / 1000)
+
+
+class ObstacleResponse(StrEnum):
+    """Available responses when an obstacle forces a stop."""
+
+    EMERGENCY_LAND = "emergency_land"
+    RETURN_TO_HOME = "return_to_home"
+    AVOID_AND_CONTINUE = "avoid_and_continue"
+    MANUAL_OVERRIDE = "manual_override"
+
+
+class ObstacleResponseHandler:
+    """Executes obstacle response actions.
+
+    Phase 4a: emergency_land + manual_override working.
+    Phase 4b: return_to_home + avoid_and_continue (navigator integration).
+    """
+
+    def __init__(self, drone: DroneAdapter) -> None:
+        self._drone = drone
+
+    async def execute(self, choice: ObstacleResponse) -> dict:
+        """Execute the chosen obstacle response."""
+        match choice:
+            case ObstacleResponse.EMERGENCY_LAND:
+                return await asyncio.to_thread(self._drone.safe_land)
+            case ObstacleResponse.RETURN_TO_HOME:
+                return {
+                    "error": "NOT_IMPLEMENTED",
+                    "detail": "Phase 4b -- requires navigator integration",
+                }
+            case ObstacleResponse.AVOID_AND_CONTINUE:
+                return {
+                    "error": "NOT_IMPLEMENTED",
+                    "detail": "Phase 4b -- requires navigator integration",
+                }
+            case ObstacleResponse.MANUAL_OVERRIDE:
+                logger.info("obstacle.manual_override")
+                return {"status": "ok", "detail": "Manual control resumed"}
