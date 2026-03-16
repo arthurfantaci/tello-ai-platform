@@ -198,6 +198,10 @@ class DroneAdapter:
         if err := self._require_connection():
             return err
         try:
+            forward_result = self.get_forward_distance()
+            forward_mm = (
+                forward_result["distance_mm"] if forward_result.get("status") == "ok" else None
+            )
             return TelemetryFrame(
                 battery_pct=self._tello.get_battery(),
                 height_cm=self._tello.get_height(),
@@ -208,6 +212,7 @@ class DroneAdapter:
                 yaw=float(self._tello.get_yaw()),
                 flight_time_s=self._tello.get_flight_time(),
                 timestamp=datetime.now(tz=UTC),
+                forward_tof_mm=forward_mm,
             )
         except Exception as e:
             logger.exception("get_telemetry failed")

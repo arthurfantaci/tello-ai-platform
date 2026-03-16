@@ -263,3 +263,19 @@ class TestDroneAdapter:
             adapter = DroneAdapter()
             result = adapter.get_forward_distance()
             assert result["error"] == "DRONE_NOT_CONNECTED"
+
+    def test_get_telemetry_includes_forward_tof(self, mock_drone):
+        mock_drone.send_expansion_command.return_value = "750"
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            frame = adapter.get_telemetry()
+            assert frame.forward_tof_mm == 750
+
+    def test_get_telemetry_forward_tof_none_on_failure(self, mock_drone):
+        mock_drone.send_expansion_command.return_value = "error"
+        with patch("tello_mcp.drone.Tello", return_value=mock_drone):
+            adapter = DroneAdapter()
+            adapter.connect()
+            frame = adapter.get_telemetry()
+            assert frame.forward_tof_mm is None
