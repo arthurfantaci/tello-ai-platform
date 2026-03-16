@@ -198,6 +198,10 @@ class DroneAdapter:
         if err := self._require_connection():
             return err
         try:
+            forward_result = self.get_forward_distance()
+            forward_mm = (
+                forward_result["distance_mm"] if forward_result.get("status") == "ok" else None
+            )
             return TelemetryFrame(
                 battery_pct=self._tello.get_battery(),
                 height_cm=self._tello.get_height(),
@@ -208,6 +212,7 @@ class DroneAdapter:
                 yaw=float(self._tello.get_yaw()),
                 flight_time_s=self._tello.get_flight_time(),
                 timestamp=datetime.now(tz=UTC),
+                forward_tof_mm=forward_mm,
             )
         except Exception as e:
             logger.exception("get_telemetry failed")
@@ -252,6 +257,25 @@ class DroneAdapter:
             return {"status": "ok"}
         except Exception as e:
             logger.exception("go_xyz_speed_mid failed")
+            return {"error": "COMMAND_FAILED", "detail": str(e)}
+
+    def get_forward_distance(self) -> dict:
+        """Query the forward-facing ToF sensor on the Dot-Matrix Module.
+
+        Returns distance in mm, or 8192 if out of range.
+        Uses EXT tof? command via the Open-Source Controller (ESP32).
+        """
+        if err := self._require_connection():
+            return err
+        try:
+            response = self._tello.send_expansion_command("tof?")
+            distance_mm = int(response)
+            return {"status": "ok", "distance_mm": distance_mm}
+        except (ValueError, TypeError):
+            logger.exception("forward_tof.parse_failed", response=response)
+            return {"error": "PARSE_ERROR", "detail": f"Unexpected response: {response}"}
+        except Exception as e:
+            logger.exception("forward_tof.query_failed")
             return {"error": "COMMAND_FAILED", "detail": str(e)}
 
     def set_led(self, r: int, g: int, b: int) -> dict:

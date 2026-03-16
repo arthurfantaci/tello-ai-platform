@@ -20,16 +20,27 @@ Commands:
     pad                   Detect mission pad
     goto X Y Z SPD MID    Fly to mission pad coordinates
     battery               Show battery percentage
+    tof                   Forward ToF sensor reading (mm)
+    monitor               Obstacle monitor config and status
     repl                  Interactive command mode
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import sys
 import time
+from datetime import UTC, datetime
 
+from tello_core.models import ObstacleReading
 from tello_mcp.drone import DroneAdapter
+from tello_mcp.obstacle import (
+    CLIResponseProvider,
+    ObstacleConfig,
+    ObstacleMonitor,
+    ObstacleResponseHandler,
+)
 
 # Delay after takeoff (drone needs time to stabilize)
 TAKEOFF_DELAY = 3.0
@@ -118,13 +129,48 @@ def run_command(drone: DroneAdapter, cmd: str, args: list[str]) -> bool:
             else:
                 print(f"Battery: {result.battery_pct}%")
 
+        case "tof":
+            result = drone.get_forward_distance()
+            if result.get("status") == "ok":
+                mm = result["distance_mm"]
+                config = ObstacleConfig.from_env()
+                temp_monitor = ObstacleMonitor(drone, config)
+                zone = temp_monitor.classify_zone(mm)
+                print(f"Forward ToF: {mm}mm ({zone.value.upper()})")
+                if zone.value == "danger":
+                    print("DANGER -- drone stopped.")
+                    reading = ObstacleReading(
+                        distance_mm=mm,
+                        zone=zone,
+                        timestamp=datetime.now(UTC),
+                    )
+                    provider = CLIResponseProvider()
+                    choice = asyncio.run(provider.present_options(reading))
+                    handler = ObstacleResponseHandler(drone)
+                    action_result = asyncio.run(handler.execute(choice))
+                    print(f"Action result: {action_result}")
+            else:
+                print(f"Forward ToF error: {result}")
+
+        case "monitor":
+            config = ObstacleConfig.from_env()
+            print("Obstacle monitor config:")
+            print(
+                f"  Thresholds: CAUTION <{config.caution_mm}mm,"
+                f" WARNING <{config.warning_mm}mm, DANGER <{config.danger_mm}mm"
+            )
+            print(f"  Out of range: {config.out_of_range}mm")
+            print(f"  Poll interval: {config.poll_interval_ms}ms")
+            print("  Note: Continuous monitoring runs inside the MCP server.")
+            print("  Use 'tof' for a one-shot forward distance reading.")
+
         case "quit" | "exit" | "q":
             return False
 
         case _:
             print(f"Unknown command: {cmd}")
             print("Commands: connect, telemetry, takeoff, land, emergency, move, rotate,")
-            print("          led, text, pad, goto, battery, repl, quit")
+            print("          led, text, pad, goto, battery, tof, monitor, quit")
 
     return True
 
@@ -133,7 +179,7 @@ def repl(drone: DroneAdapter) -> None:
     """Interactive command loop."""
     print("Tello REPL — type 'quit' to exit")
     print("Commands: connect, telemetry, takeoff, land, emergency, move, rotate,")
-    print("          led, text, pad, goto, battery, quit")
+    print("          led, text, pad, goto, battery, tof, monitor, quit")
     print()
 
     while True:
