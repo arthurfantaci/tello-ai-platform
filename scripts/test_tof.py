@@ -17,6 +17,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from tello_core.models import ObstacleReading, TelemetryFrame
 from tello_mcp.drone import DroneAdapter
@@ -29,7 +30,15 @@ from tello_mcp.obstacle import (
 
 TAKEOFF_DELAY = 3.0
 COMMAND_DELAY = 0.5
-OUT_OF_RANGE = 8192
+OUT_OF_RANGE_MIN = 8000
+
+
+def mm_to_imperial(mm: int) -> str:
+    """Convert mm to approximate imperial string for operator display."""
+    inches = mm / 25.4
+    if inches >= 36:
+        return f"~{inches / 12:.1f}ft"
+    return f"~{inches:.1f}in"
 
 
 def prompt(msg: str) -> None:
@@ -61,7 +70,7 @@ def run_test_1(drone: DroneAdapter, monitor: ObstacleMonitor) -> dict:
 
     mm = result["distance_mm"]
     zone = monitor.classify_zone(mm)
-    print(f"  Reading: {mm}mm ({zone.value.upper()})")
+    print(f"  Reading: {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
     print("  PASS")
     return {
         "name": "sensor_alive",
@@ -86,7 +95,7 @@ def run_test_2(drone: DroneAdapter, monitor: ObstacleMonitor) -> dict:
             mm = result["distance_mm"]
             zone = monitor.classify_zone(mm)
             readings.append({"timestamp": ts, "distance_mm": mm, "zone": zone.value})
-            print(f"  [{i + 1:2d}/20] {mm}mm ({zone.value.upper()})")
+            print(f"  [{i + 1:2d}/20] {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
         else:
             readings.append({"timestamp": ts, "distance_mm": None, "zone": "error"})
             print(f"  [{i + 1:2d}/20] ERROR: {result}")
@@ -95,7 +104,7 @@ def run_test_2(drone: DroneAdapter, monitor: ObstacleMonitor) -> dict:
     valid = [
         r["distance_mm"]
         for r in readings
-        if r["distance_mm"] is not None and r["distance_mm"] != OUT_OF_RANGE
+        if r["distance_mm"] is not None and r["distance_mm"] < OUT_OF_RANGE_MIN
     ]
     distinct = len(set(valid))
     mn = min(valid) if valid else None
@@ -116,11 +125,11 @@ def run_test_2(drone: DroneAdapter, monitor: ObstacleMonitor) -> dict:
 
 
 def run_test_3(drone: DroneAdapter, monitor: ObstacleMonitor) -> dict:
-    """Test 3: Close Object — verify DANGER zone at <40cm."""
+    """Test 3: Close Object — verify DANGER zone at <200mm (~8in)."""
     print("\n" + "─" * 60)
     print("TEST 3: Close Object Detection")
     print("─" * 60)
-    prompt("Hold your hand less than 40cm from the sensor.")
+    prompt("Hold your hand less than 200mm (~8in) from the sensor.")
 
     result = read_distance(drone)
     if result.get("status") != "ok":
@@ -134,17 +143,17 @@ def run_test_3(drone: DroneAdapter, monitor: ObstacleMonitor) -> dict:
 
     mm = result["distance_mm"]
     zone = monitor.classify_zone(mm)
-    print(f"  Reading: {mm}mm ({zone.value.upper()})")
+    print(f"  Reading: {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
 
     if zone.value == "danger":
         status = "pass"
         notes = ""
     elif zone.value == "warning":
         status = "pass"
-        notes = "Marginal — WARNING zone, not DANGER. Hand may be >40cm."
+        notes = "Marginal — WARNING zone, not DANGER. Hand may be >200mm (~8in)."
     else:
         status = "fail"
-        notes = f"Expected DANGER (<400mm), got {zone.value} ({mm}mm)"
+        notes = f"Expected DANGER (<200mm/~8in), got {zone.value} ({mm}mm)"
 
     print(f"  {status.upper()}" + (f" ({notes})" if notes else ""))
     return {
@@ -160,7 +169,7 @@ def run_test_4(drone: DroneAdapter, monitor: ObstacleMonitor) -> dict:
     print("\n" + "─" * 60)
     print("TEST 4: Stability Test (6 seconds)")
     print("─" * 60)
-    prompt("Point drone at a wall or flat surface ~1m away. Keep still.")
+    prompt("Point drone at a wall or flat surface ~1m (~3.3ft) away. Keep still.")
 
     readings = []
     for _i in range(30):
@@ -176,7 +185,7 @@ def run_test_4(drone: DroneAdapter, monitor: ObstacleMonitor) -> dict:
     valid = [
         r["distance_mm"]
         for r in readings
-        if r["distance_mm"] is not None and r["distance_mm"] != OUT_OF_RANGE
+        if r["distance_mm"] is not None and r["distance_mm"] < OUT_OF_RANGE_MIN
     ]
 
     if len(valid) < 5:
@@ -256,6 +265,7 @@ def run_test_6(
     monitor: ObstacleMonitor,
     config: ObstacleConfig,
     battery: int | None,
+    tello: Any,
 ) -> dict:
     """Test 6: Flight DANGER Stop — full safety pipeline."""
     print("\n" + "─" * 60)
@@ -277,7 +287,8 @@ def run_test_6(
     resp = (
         input(
             "\n  FLIGHT TEST. Place drone on flat surface "
-            "facing a wall (~2m away).\n  Ready to fly? (y/n): "
+            "facing a wall (~2m / ~6.5ft away).\n"
+            "  Ready to fly? (y/n): "
         )
         .strip()
         .lower()
@@ -301,8 +312,12 @@ def run_test_6(
         }
 
     pre_mm = pre["distance_mm"]
-    if pre_mm < 1500 and pre_mm != OUT_OF_RANGE:
-        print(f"  ABORT — too close to wall ({pre_mm}mm < 1500mm). Move drone back and retry.")
+    if pre_mm < 500 and pre_mm < OUT_OF_RANGE_MIN:
+        print(
+            f"  ABORT — too close to wall ({pre_mm}mm / "
+            f"{mm_to_imperial(pre_mm)} < 500mm / ~20in). "
+            f"Move drone back and retry."
+        )
         return {
             "name": "flight_danger_stop",
             "status": "fail",
@@ -318,16 +333,43 @@ def run_test_6(
         },
     ]
 
-    # Takeoff
+    # Takeoff with race condition detection
     print("  Taking off...")
-    result = drone.takeoff()
-    if result.get("status") != "ok":
-        print(f"  FAIL — takeoff failed: {result}")
+    takeoff_result = drone.takeoff()
+    takeoff_succeeded = False
+    height_after_takeoff = None
+    takeoff_race_condition = False
+
+    if takeoff_result.get("status") == "ok":
+        takeoff_succeeded = True
+    else:
+        # Takeoff reported failure — check if drone is actually airborne
+        try:
+            height_after_takeoff = tello.get_height()
+            if height_after_takeoff > 0:
+                print(
+                    f"  NOTE: takeoff() returned error but drone is "
+                    f"airborne (height={height_after_takeoff}cm)"
+                )
+                print("  Known djitellopy retry race condition — continuing test")
+                takeoff_succeeded = True
+                takeoff_race_condition = True
+            else:
+                print(f"  FAIL — takeoff genuinely failed: {takeoff_result}")
+        except Exception:
+            print(f"  FAIL — takeoff failed and height check unavailable: {takeoff_result}")
+
+    if not takeoff_succeeded:
         return {
             "name": "flight_danger_stop",
             "status": "fail",
-            "notes": f"Takeoff failed: {result}",
+            "takeoff_raw_result": takeoff_result,
+            "height_after_takeoff_cm": height_after_takeoff,
+            "battery_at_takeoff": battery,
+            "takeoff_race_condition_detected": False,
+            "notes": f"Takeoff failed: {takeoff_result}",
         }
+
     print(f"  Stabilizing ({TAKEOFF_DELAY}s)...")
     time.sleep(TAKEOFF_DELAY)
 
@@ -336,7 +378,7 @@ def run_test_6(
     action_result = None
 
     try:
-        prompt("Drone is hovering. It will fly forward 100cm.")
+        prompt("Drone is hovering. It will fly forward 100cm (~3.3ft).")
 
         # Check before move
         r = read_distance(drone)
@@ -344,10 +386,10 @@ def run_test_6(
             mm = r["distance_mm"]
             zone = monitor.classify_zone(mm)
             distance_checks.append({"phase": "pre_move", "distance_mm": mm, "zone": zone.value})
-            print(f"  Pre-move: {mm}mm ({zone.value.upper()})")
+            print(f"  Pre-move: {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
 
         # Move 100cm forward
-        print("  Moving forward 100cm...")
+        print("  Moving forward 100cm (~3.3ft)...")
         drone.move("forward", 100)
         time.sleep(COMMAND_DELAY)
 
@@ -357,13 +399,13 @@ def run_test_6(
             mm = r["distance_mm"]
             zone = monitor.classify_zone(mm)
             distance_checks.append({"phase": "after_100cm", "distance_mm": mm, "zone": zone.value})
-            print(f"  After 100cm: {mm}mm ({zone.value.upper()})")
+            print(f"  After 100cm: {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
 
             if zone.value == "danger":
                 danger_triggered = True
             else:
                 # Move another 50cm
-                print("  Not DANGER yet. Moving forward 50cm...")
+                print("  Not DANGER yet. Moving forward 50cm (~20in)...")
                 drone.move("forward", 50)
                 time.sleep(COMMAND_DELAY)
 
@@ -378,13 +420,12 @@ def run_test_6(
                             "zone": zone.value,
                         }
                     )
-                    print(f"  After 150cm: {mm}mm ({zone.value.upper()})")
+                    print(f"  After 150cm: {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
                     if zone.value == "danger":
                         danger_triggered = True
 
         if danger_triggered:
             print("\n  DANGER DETECTED — presenting options menu")
-            # Build reading for the options menu
             last_check = distance_checks[-1]
             reading = ObstacleReading(
                 distance_mm=last_check["distance_mm"],
@@ -398,7 +439,7 @@ def run_test_6(
             action_result = asyncio.run(handler.execute(choice))
             print(f"  Action result: {action_result}")
         else:
-            print("\n  No DANGER triggered after 150cm. Landing safely.")
+            print("\n  No DANGER triggered after 150cm (~5ft). Landing safely.")
             drone.safe_land()
 
     except Exception as e:
@@ -409,6 +450,10 @@ def run_test_6(
             "name": "flight_danger_stop",
             "status": "fail",
             "distance_checks": distance_checks,
+            "takeoff_raw_result": takeoff_result,
+            "height_after_takeoff_cm": height_after_takeoff,
+            "battery_at_takeoff": battery,
+            "takeoff_race_condition_detected": takeoff_race_condition,
             "notes": f"Flight error: {e}",
         }
 
@@ -424,6 +469,10 @@ def run_test_6(
         "danger_triggered": danger_triggered,
         "chosen_response": chosen_response,
         "action_result": action_result,
+        "takeoff_raw_result": takeoff_result,
+        "height_after_takeoff_cm": height_after_takeoff,
+        "battery_at_takeoff": battery,
+        "takeoff_race_condition_detected": takeoff_race_condition,
         "notes": notes,
     }
 
@@ -433,7 +482,7 @@ def build_characterization(
     all_readings: list[int],
 ) -> dict:
     """Compute sensor characterization from all test data."""
-    valid = [r for r in all_readings if r != OUT_OF_RANGE]
+    valid = [r for r in all_readings if r < OUT_OF_RANGE_MIN]
     effective_min = min(valid) if valid else None
     effective_max = max(valid) if valid else None
 
@@ -464,7 +513,7 @@ def save_results(output: dict) -> None:
     testing_dir = Path("testing")
     testing_dir.mkdir(exist_ok=True)
     date_str = datetime.now(UTC).strftime("%Y-%m-%d")
-    path = testing_dir / f"phase4-tof-results-{date_str}.json"
+    path = testing_dir / f"forward-tof-threshold-results-{date_str}.json"
     with open(path, "w") as f:
         json.dump(output, f, indent=2, default=str)
     print(f"\nResults saved to {path}")
@@ -502,7 +551,7 @@ def print_summary(results: list[dict], characterization: dict) -> None:
 def main() -> None:
     """Entry point."""
     parser = argparse.ArgumentParser(
-        description="Phase 4 ToF sensor physical test script",
+        description="Forward ToF threshold verification test script",
     )
     parser.add_argument(
         "--host",
@@ -512,7 +561,7 @@ def main() -> None:
     parsed = parser.parse_args()
 
     print("=" * 60)
-    print("  Phase 4 — Forward ToF Sensor Test Suite")
+    print("  Forward ToF Sensor — Threshold Verification Test Suite")
     print("=" * 60)
 
     # Connect
@@ -533,9 +582,9 @@ def main() -> None:
     battery_start = telemetry.battery_pct if isinstance(telemetry, TelemetryFrame) else None
     print(f"Battery: {battery_start}%")
     print(
-        f"Thresholds: CAUTION <{config.caution_mm}mm, "
-        f"WARNING <{config.warning_mm}mm, "
-        f"DANGER <{config.danger_mm}mm"
+        f"Thresholds: CAUTION <{config.caution_mm}mm ({mm_to_imperial(config.caution_mm)}), "
+        f"WARNING <{config.warning_mm}mm ({mm_to_imperial(config.warning_mm)}), "
+        f"DANGER <{config.danger_mm}mm ({mm_to_imperial(config.danger_mm)})"
     )
 
     # Run tests
@@ -569,7 +618,7 @@ def main() -> None:
             t2 = run_test_2(drone, monitor)
             results.append(t2)
             for r in t2.get("readings", []):
-                if r["distance_mm"] != OUT_OF_RANGE:
+                if r["distance_mm"] is not None and r["distance_mm"] < OUT_OF_RANGE_MIN:
                     all_readings.append(r["distance_mm"])
 
             t3 = run_test_3(drone, monitor)
@@ -580,16 +629,16 @@ def main() -> None:
             t4 = run_test_4(drone, monitor)
             results.append(t4)
             for r in t4.get("readings", []):
-                if r["distance_mm"] != OUT_OF_RANGE:
+                if r["distance_mm"] is not None and r["distance_mm"] < OUT_OF_RANGE_MIN:
                     all_readings.append(r["distance_mm"])
 
             t5 = run_test_5(drone)
             results.append(t5)
 
-            t6 = run_test_6(drone, monitor, config, battery_start)
+            t6 = run_test_6(drone, monitor, config, battery_start, drone._tello)
             results.append(t6)
             for check in t6.get("distance_checks", []):
-                if check["distance_mm"] != OUT_OF_RANGE:
+                if check["distance_mm"] is not None and check["distance_mm"] < OUT_OF_RANGE_MIN:
                     all_readings.append(check["distance_mm"])
 
     except KeyboardInterrupt:
@@ -612,7 +661,8 @@ def main() -> None:
             "caution_mm": config.caution_mm,
             "warning_mm": config.warning_mm,
             "danger_mm": config.danger_mm,
-            "out_of_range": config.out_of_range,
+            "out_of_range_min": config.out_of_range_min,
+            "required_clear_readings": config.required_clear_readings,
             "poll_interval_ms": config.poll_interval_ms,
         },
         "tests": results,
