@@ -80,6 +80,8 @@ class ObstacleMonitor:
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._callbacks: list[Callable[[ObstacleReading], None | Awaitable[None]]] = []
+        self._in_danger = False
+        self._danger_clear_count = 0
 
     def classify_zone(self, distance_mm: int) -> ObstacleZone:
         """Classify a distance reading into an obstacle zone.
@@ -139,17 +141,35 @@ class ObstacleMonitor:
             result = await asyncio.to_thread(self._drone.get_forward_distance)
             if result.get("status") == "ok":
                 distance_mm = result["distance_mm"]
-                zone = self.classify_zone(distance_mm)
+                raw_zone = self.classify_zone(distance_mm)
+
+                # Debounce DANGER exit
+                if self._in_danger:
+                    if raw_zone != ObstacleZone.DANGER:
+                        self._danger_clear_count += 1
+                        if self._danger_clear_count >= self._config.required_clear_readings:
+                            self._in_danger = False
+                            reported_zone = raw_zone
+                        else:
+                            reported_zone = ObstacleZone.DANGER
+                    else:
+                        self._danger_clear_count = 0
+                        reported_zone = ObstacleZone.DANGER
+                elif raw_zone == ObstacleZone.DANGER:
+                    self._in_danger = True
+                    self._danger_clear_count = 0
+                    logger.warning("obstacle.danger", distance_mm=distance_mm)
+                    await asyncio.to_thread(self._drone.stop)
+                    reported_zone = ObstacleZone.DANGER
+                else:
+                    reported_zone = raw_zone
+
                 reading = ObstacleReading(
                     distance_mm=distance_mm,
-                    zone=zone,
+                    zone=reported_zone,
                     timestamp=datetime.now(UTC),
                 )
                 self._latest = reading
-
-                if zone == ObstacleZone.DANGER:
-                    logger.warning("obstacle.danger", distance_mm=distance_mm)
-                    await asyncio.to_thread(self._drone.stop)
 
                 for cb in self._callbacks:
                     cb_result = cb(reading)

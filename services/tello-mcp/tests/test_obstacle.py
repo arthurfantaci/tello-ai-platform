@@ -230,11 +230,17 @@ class TestObstacleMonitorDebounce:
     """Tests for DANGER exit debouncing in the poll loop."""
 
     def _make_monitor(self, readings: list[int], poll_ms: int = 50) -> tuple:
-        """Create a monitor with a sequence of mocked readings."""
+        """Create a monitor with a sequence of mocked readings.
+
+        A sentinel error dict is appended so the poll loop skips cleanly
+        after the reading list is exhausted rather than raising StopIteration
+        inside asyncio.to_thread.
+        """
         drone = MagicMock()
+        _sentinel = {"error": "EXHAUSTED", "detail": "no more readings"}
         drone.get_forward_distance.side_effect = [
             {"status": "ok", "distance_mm": mm} for mm in readings
-        ]
+        ] + [_sentinel] * 20
         drone.stop = MagicMock(return_value={"status": "ok"})
         config = ObstacleConfig(
             poll_interval_ms=poll_ms,
