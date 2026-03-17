@@ -267,7 +267,13 @@ def run_test_6(
     battery: int | None,
     tello: Any,
 ) -> dict:
-    """Test 6: Flight DANGER Stop — full safety pipeline."""
+    """Test 6: Flight DANGER Stop — full safety pipeline.
+
+    Starts the ObstacleMonitor for continuous protection during flight.
+    The monitor polls at ~3.2 Hz and calls drone.stop() immediately
+    when a DANGER reading is detected — preventing wall collisions
+    even during long move commands.
+    """
     print("\n" + "─" * 60)
     print("TEST 6: Flight DANGER Stop (OPTIONAL)")
     print("─" * 60)
@@ -288,6 +294,7 @@ def run_test_6(
         input(
             "\n  FLIGHT TEST. Place drone on flat surface "
             "facing a wall (~2m / ~6.5ft away).\n"
+            "  The ObstacleMonitor will protect the drone during flight.\n"
             "  Ready to fly? (y/n): "
         )
         .strip()
@@ -373,6 +380,26 @@ def run_test_6(
     print(f"  Stabilizing ({TAKEOFF_DELAY}s)...")
     time.sleep(TAKEOFF_DELAY)
 
+    # Start ObstacleMonitor for continuous protection during flight.
+    # The monitor polls at ~3.2 Hz and calls drone.stop() when DANGER
+    # is detected — this prevents collisions during move commands.
+    monitor_danger_triggered = False
+    monitor_readings: list[ObstacleReading] = []
+
+    def on_monitor_reading(reading: ObstacleReading) -> None:
+        nonlocal monitor_danger_triggered
+        monitor_readings.append(reading)
+        if reading.zone.value == "danger":
+            monitor_danger_triggered = True
+            print(
+                f"  ** MONITOR: DANGER at {reading.distance_mm}mm "
+                f"({mm_to_imperial(reading.distance_mm)}) — drone.stop() called **"
+            )
+
+    monitor.on_reading(on_monitor_reading)
+    print("  Starting ObstacleMonitor (continuous protection)...")
+    asyncio.run(monitor.start())
+
     danger_triggered = False
     chosen_response = None
     action_result = None
@@ -388,12 +415,12 @@ def run_test_6(
             distance_checks.append({"phase": "pre_move", "distance_mm": mm, "zone": zone.value})
             print(f"  Pre-move: {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
 
-        # Move 100cm forward
+        # Move 100cm forward — ObstacleMonitor will stop the drone if DANGER
         print("  Moving forward 100cm (~3.3ft)...")
         drone.move("forward", 100)
         time.sleep(COMMAND_DELAY)
 
-        # Check after first move
+        # Check after first move (or after monitor stopped the drone)
         r = read_distance(drone)
         if r.get("status") == "ok":
             mm = r["distance_mm"]
@@ -401,10 +428,10 @@ def run_test_6(
             distance_checks.append({"phase": "after_100cm", "distance_mm": mm, "zone": zone.value})
             print(f"  After 100cm: {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
 
-            if zone.value == "danger":
+            if zone.value == "danger" or monitor_danger_triggered:
                 danger_triggered = True
             else:
-                # Move another 50cm
+                # Move another 50cm — monitor still protecting
                 print("  Not DANGER yet. Moving forward 50cm (~20in)...")
                 drone.move("forward", 50)
                 time.sleep(COMMAND_DELAY)
@@ -421,17 +448,31 @@ def run_test_6(
                         }
                     )
                     print(f"  After 150cm: {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
-                    if zone.value == "danger":
+                    if zone.value == "danger" or monitor_danger_triggered:
                         danger_triggered = True
+        elif monitor_danger_triggered:
+            # Sensor read failed but monitor caught DANGER during the move
+            danger_triggered = True
+
+        # Stop the monitor before presenting options
+        asyncio.run(monitor.stop())
+        print("  ObstacleMonitor stopped.")
 
         if danger_triggered:
-            print("\n  DANGER DETECTED — presenting options menu")
-            last_check = distance_checks[-1]
-            reading = ObstacleReading(
-                distance_mm=last_check["distance_mm"],
-                zone=monitor.classify_zone(last_check["distance_mm"]),
-                timestamp=datetime.now(UTC),
-            )
+            print("\n  DANGER DETECTED")
+            if monitor_danger_triggered:
+                print("  (Caught by ObstacleMonitor — drone was stopped mid-flight)")
+            print("  Presenting options menu...")
+            # Use monitor's last reading if available, else use last distance check
+            if monitor_readings and monitor_readings[-1].zone.value == "danger":
+                reading = monitor_readings[-1]
+            else:
+                last_check = distance_checks[-1]
+                reading = ObstacleReading(
+                    distance_mm=last_check["distance_mm"],
+                    zone=monitor.classify_zone(last_check["distance_mm"]),
+                    timestamp=datetime.now(UTC),
+                )
             provider = CLIResponseProvider()
             choice = asyncio.run(provider.present_options(reading))
             chosen_response = choice.value
@@ -445,11 +486,14 @@ def run_test_6(
     except Exception as e:
         print(f"\n  ERROR during flight: {e}")
         print("  Emergency landing...")
+        asyncio.run(monitor.stop())
         drone.safe_land()
         return {
             "name": "flight_danger_stop",
             "status": "fail",
             "distance_checks": distance_checks,
+            "monitor_readings_count": len(monitor_readings),
+            "monitor_danger_triggered": monitor_danger_triggered,
             "takeoff_raw_result": takeoff_result,
             "height_after_takeoff_cm": height_after_takeoff,
             "battery_at_takeoff": battery,
@@ -458,7 +502,11 @@ def run_test_6(
         }
 
     status = "pass" if danger_triggered else "needs_adjustment"
-    notes = "" if danger_triggered else "DANGER never triggered — thresholds may need tuning"
+    notes = ""
+    if not danger_triggered:
+        notes = "DANGER never triggered — thresholds may need tuning"
+    elif monitor_danger_triggered:
+        notes = "DANGER caught by ObstacleMonitor (continuous protection)"
     print(f"\n  {status.upper()}" + (f" ({notes})" if notes else ""))
 
     return {
@@ -467,6 +515,8 @@ def run_test_6(
         "pre_flight_distance_mm": pre_mm,
         "distance_checks": distance_checks,
         "danger_triggered": danger_triggered,
+        "monitor_danger_triggered": monitor_danger_triggered,
+        "monitor_readings_count": len(monitor_readings),
         "chosen_response": chosen_response,
         "action_result": action_result,
         "takeoff_raw_result": takeoff_result,
