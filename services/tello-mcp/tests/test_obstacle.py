@@ -21,17 +21,18 @@ from tello_mcp.obstacle import (
 class TestObstacleConfig:
     def test_default_values(self):
         config = ObstacleConfig()
-        assert config.caution_mm == 1500
-        assert config.warning_mm == 800
-        assert config.danger_mm == 400
-        assert config.out_of_range == 8192
+        assert config.caution_mm == 500
+        assert config.warning_mm == 300
+        assert config.danger_mm == 200
+        assert config.out_of_range_min == 8000
+        assert config.required_clear_readings == 3
         assert config.poll_interval_ms == 200
 
     def test_custom_values(self):
         config = ObstacleConfig(danger_mm=500, poll_interval_ms=100)
         assert config.danger_mm == 500
         assert config.poll_interval_ms == 100
-        assert config.caution_mm == 1500  # unchanged default
+        assert config.caution_mm == 500  # unchanged default
 
     def test_from_env(self, monkeypatch):
         monkeypatch.setenv("OBSTACLE_DANGER_MM", "500")
@@ -39,11 +40,11 @@ class TestObstacleConfig:
         config = ObstacleConfig.from_env()
         assert config.danger_mm == 500
         assert config.poll_interval_ms == 100
-        assert config.caution_mm == 1500  # default
+        assert config.caution_mm == 500  # default
 
     def test_from_env_no_vars(self):
         config = ObstacleConfig.from_env()
-        assert config.danger_mm == 400  # default
+        assert config.danger_mm == 200  # default
 
     def test_frozen(self):
         config = ObstacleConfig()
