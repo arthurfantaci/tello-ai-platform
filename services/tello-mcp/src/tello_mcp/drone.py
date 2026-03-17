@@ -268,8 +268,10 @@ class DroneAdapter:
         if err := self._require_connection():
             return err
         try:
-            response = self._tello.send_expansion_command("tof?")
-            distance_mm = int(response)
+            response = self._tello.send_read_command("EXT tof?")
+            # Response format: "tof NNN" — strip the prefix
+            raw = response.replace("tof", "").strip()
+            distance_mm = int(raw)
             return {"status": "ok", "distance_mm": distance_mm}
         except (ValueError, TypeError):
             logger.exception("forward_tof.parse_failed", response=response)

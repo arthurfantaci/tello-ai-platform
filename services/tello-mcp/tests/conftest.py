@@ -51,6 +51,7 @@ def mock_drone():
     drone.send_keepalive = MagicMock()
     drone.go_xyz_speed_mid = MagicMock()
     drone.send_expansion_command = MagicMock()
+    drone.send_read_command = MagicMock(return_value="tof 0")
     drone.get_mission_pad_distance_x = MagicMock(return_value=10)
     drone.get_mission_pad_distance_y = MagicMock(return_value=20)
     drone.get_mission_pad_distance_z = MagicMock(return_value=50)
