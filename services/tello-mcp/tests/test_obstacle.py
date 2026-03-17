@@ -117,19 +117,19 @@ class TestObstacleMonitorLifecycle:
 class TestObstacleMonitorPolling:
     async def test_poll_caches_latest_reading(self):
         drone = MagicMock()
-        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 1200}
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 400}
         config = ObstacleConfig(poll_interval_ms=50)
         monitor = ObstacleMonitor(drone, config)
         await monitor.start()
         await asyncio.sleep(0.15)  # allow a few polls
         await monitor.stop()
         assert monitor.latest is not None
-        assert monitor.latest.distance_mm == 1200
+        assert monitor.latest.distance_mm == 400
         assert monitor.latest.zone == ObstacleZone.CAUTION
 
     async def test_danger_zone_calls_stop(self):
         drone = MagicMock()
-        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 200}
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 150}
         drone.stop = MagicMock(return_value={"status": "ok"})
         config = ObstacleConfig(poll_interval_ms=50)
         monitor = ObstacleMonitor(drone, config)
@@ -140,7 +140,7 @@ class TestObstacleMonitorPolling:
 
     async def test_clear_zone_does_not_call_stop(self):
         drone = MagicMock()
-        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 8192}
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 8000}
         drone.stop = MagicMock()
         config = ObstacleConfig(poll_interval_ms=50)
         monitor = ObstacleMonitor(drone, config)
