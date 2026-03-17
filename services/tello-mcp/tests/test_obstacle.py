@@ -60,28 +60,31 @@ class TestClassifyZone:
         self.monitor = ObstacleMonitor(MagicMock(), self.config)
 
     def test_out_of_range_is_clear(self):
-        assert self.monitor.classify_zone(8192) == ObstacleZone.CLEAR
+        assert self.monitor.classify_zone(8000) == ObstacleZone.CLEAR
+
+    def test_well_above_out_of_range_is_clear(self):
+        assert self.monitor.classify_zone(8190) == ObstacleZone.CLEAR
 
     def test_above_caution_is_clear(self):
-        assert self.monitor.classify_zone(2000) == ObstacleZone.CLEAR
+        assert self.monitor.classify_zone(600) == ObstacleZone.CLEAR
 
     def test_at_caution_boundary_is_clear(self):
-        assert self.monitor.classify_zone(1500) == ObstacleZone.CLEAR
+        assert self.monitor.classify_zone(500) == ObstacleZone.CLEAR
 
     def test_below_caution_is_caution(self):
-        assert self.monitor.classify_zone(1499) == ObstacleZone.CAUTION
+        assert self.monitor.classify_zone(499) == ObstacleZone.CAUTION
 
     def test_at_warning_boundary_is_caution(self):
-        assert self.monitor.classify_zone(800) == ObstacleZone.CAUTION
+        assert self.monitor.classify_zone(300) == ObstacleZone.CAUTION
 
     def test_below_warning_is_warning(self):
-        assert self.monitor.classify_zone(799) == ObstacleZone.WARNING
+        assert self.monitor.classify_zone(299) == ObstacleZone.WARNING
 
     def test_at_danger_boundary_is_warning(self):
-        assert self.monitor.classify_zone(400) == ObstacleZone.WARNING
+        assert self.monitor.classify_zone(200) == ObstacleZone.WARNING
 
     def test_below_danger_is_danger(self):
-        assert self.monitor.classify_zone(399) == ObstacleZone.DANGER
+        assert self.monitor.classify_zone(199) == ObstacleZone.DANGER
 
     def test_zero_is_danger(self):
         assert self.monitor.classify_zone(0) == ObstacleZone.DANGER
@@ -97,7 +100,7 @@ class TestClassifyZone:
 class TestObstacleMonitorLifecycle:
     async def test_start_is_idempotent(self):
         drone = MagicMock()
-        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 8192}
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 8000}
         monitor = ObstacleMonitor(drone, ObstacleConfig(poll_interval_ms=50))
         await monitor.start()
         task1 = monitor._task
