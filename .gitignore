@@ -55,3 +55,14 @@ redis_data/
 
 # Git worktrees
 .worktrees/
+
+# Vendor PDFs (large binary files)
+docs/tello-drone-docs/*.pdf
+
+# Generated test artifacts
+testing/*.pdf
+testing/*.html
+testing/*.jpeg
+
+# Machine-specific hookify configs
+.claude/hookify.*.local.md
