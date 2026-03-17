@@ -226,6 +226,79 @@ class TestObstacleResponseHandler:
         assert result["error"] == "NOT_IMPLEMENTED"
 
 
+class TestObstacleMonitorDebounce:
+    """Tests for DANGER exit debouncing in the poll loop."""
+
+    def _make_monitor(self, readings: list[int], poll_ms: int = 50) -> tuple:
+        """Create a monitor with a sequence of mocked readings."""
+        drone = MagicMock()
+        drone.get_forward_distance.side_effect = [
+            {"status": "ok", "distance_mm": mm} for mm in readings
+        ]
+        drone.stop = MagicMock(return_value={"status": "ok"})
+        config = ObstacleConfig(
+            poll_interval_ms=poll_ms,
+            required_clear_readings=3,
+        )
+        monitor = ObstacleMonitor(drone, config)
+        return monitor, drone
+
+    async def test_danger_entry_is_immediate(self):
+        """Single DANGER reading triggers drone.stop() with no delay."""
+        monitor, drone = self._make_monitor([150])
+        await monitor.start()
+        await asyncio.sleep(0.1)
+        await monitor.stop()
+        drone.stop.assert_called()
+        assert monitor.latest.zone == ObstacleZone.DANGER
+
+    async def test_danger_exit_requires_consecutive_clear(self):
+        """3 consecutive non-DANGER readings needed to exit DANGER."""
+        # DANGER, then 2 clear (not enough), then 1 DANGER (reset),
+        # then 3 clear (enough to exit)
+        readings = [150, 600, 600, 150, 600, 600, 600]
+        monitor, drone = self._make_monitor(readings)
+        collected: list[ObstacleReading] = []
+        monitor.on_reading(collected.append)
+        await monitor.start()
+        await asyncio.sleep(0.5)
+        await monitor.stop()
+        zones = [r.zone for r in collected]
+        assert zones[0] == ObstacleZone.DANGER
+        assert zones[1] == ObstacleZone.DANGER
+        assert zones[2] == ObstacleZone.DANGER
+        assert zones[3] == ObstacleZone.DANGER
+        assert zones[4] == ObstacleZone.DANGER
+        assert zones[5] == ObstacleZone.DANGER
+        assert zones[6] == ObstacleZone.CLEAR
+
+    async def test_debounce_does_not_apply_to_non_danger(self):
+        """CAUTION/WARNING/CLEAR transitions are instant, no debounce."""
+        readings = [400, 250, 400]  # CAUTION -> WARNING -> CAUTION
+        monitor, _drone = self._make_monitor(readings)
+        collected: list[ObstacleReading] = []
+        monitor.on_reading(collected.append)
+        await monitor.start()
+        await asyncio.sleep(0.25)
+        await monitor.stop()
+        zones = [r.zone for r in collected]
+        assert zones[0] == ObstacleZone.CAUTION
+        assert zones[1] == ObstacleZone.WARNING
+        assert zones[2] == ObstacleZone.CAUTION
+
+    async def test_single_danger_during_debounce_resets_counter(self):
+        """A DANGER reading mid-debounce resets the clear counter."""
+        readings = [150, 600, 600, 150, 600]
+        monitor, _drone = self._make_monitor(readings)
+        collected: list[ObstacleReading] = []
+        monitor.on_reading(collected.append)
+        await monitor.start()
+        await asyncio.sleep(0.35)
+        await monitor.stop()
+        zones = [r.zone for r in collected]
+        assert all(z == ObstacleZone.DANGER for z in zones)
+
+
 class TestCLIResponseProvider:
     async def test_present_options_emergency_land(self, monkeypatch):
         provider = CLIResponseProvider()
