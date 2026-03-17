@@ -1,0 +1,305 @@
+{
+  "date": "2026-03-17T21:47:16.099089+00:00",
+  "drone_host": "auto",
+  "battery_start": 84,
+  "battery_end": 73,
+  "obstacle_config": {
+    "caution_mm": 500,
+    "warning_mm": 300,
+    "danger_mm": 200,
+    "out_of_range_min": 8000,
+    "required_clear_readings": 3,
+    "poll_interval_ms": 200
+  },
+  "tests": [
+    {
+      "name": "sensor_alive",
+      "status": "pass",
+      "reading": {
+        "distance_mm": 988,
+        "zone": "clear"
+      },
+      "notes": ""
+    },
+    {
+      "name": "range_sweep",
+      "status": "pass",
+      "readings": [
+        {
+          "timestamp": "2026-03-17T21:45:52.589303+00:00",
+          "distance_mm": 971,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:53.205704+00:00",
+          "distance_mm": 945,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:53.824664+00:00",
+          "distance_mm": 936,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:54.437207+00:00",
+          "distance_mm": 927,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:55.047846+00:00",
+          "distance_mm": 907,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:55.664924+00:00",
+          "distance_mm": 884,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:56.278020+00:00",
+          "distance_mm": 854,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:56.887819+00:00",
+          "distance_mm": 812,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:57.497460+00:00",
+          "distance_mm": 806,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:58.106090+00:00",
+          "distance_mm": 795,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:58.715362+00:00",
+          "distance_mm": 733,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:45:59.327557+00:00",
+          "distance_mm": 565,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:46:00.039981+00:00",
+          "distance_mm": 538,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T21:46:00.651107+00:00",
+          "distance_mm": 469,
+          "zone": "caution"
+        },
+        {
+          "timestamp": "2026-03-17T21:46:01.259063+00:00",
+          "distance_mm": 445,
+          "zone": "caution"
+        },
+        {
+          "timestamp": "2026-03-17T21:46:01.869837+00:00",
+          "distance_mm": 420,
+          "zone": "caution"
+        },
+        {
+          "timestamp": "2026-03-17T21:46:02.472243+00:00",
+          "distance_mm": 435,
+          "zone": "caution"
+        },
+        {
+          "timestamp": "2026-03-17T21:46:03.078875+00:00",
+          "distance_mm": 352,
+          "zone": "caution"
+        },
+        {
+          "timestamp": "2026-03-17T21:46:03.687885+00:00",
+          "distance_mm": 243,
+          "zone": "warning"
+        },
+        {
+          "timestamp": "2026-03-17T21:46:04.294411+00:00",
+          "distance_mm": 204,
+          "zone": "warning"
+        }
+      ],
+      "stats": {
+        "min": 204,
+        "max": 971,
+        "distinct_values": 20
+      },
+      "notes": ""
+    },
+    {
+      "name": "close_object",
+      "status": "pass",
+      "reading": {
+        "distance_mm": 157,
+        "zone": "danger"
+      },
+      "notes": ""
+    },
+    {
+      "name": "stability",
+      "status": "pass",
+      "readings": [
+        {
+          "timestamp": "2026-03-17T21:46:20.380327+00:00",
+          "distance_mm": 990
+        },
+        {
+          "timestamp": "2026-03-17T21:46:20.688045+00:00",
+          "distance_mm": 988
+        },
+        {
+          "timestamp": "2026-03-17T21:46:20.994159+00:00",
+          "distance_mm": 993
+        },
+        {
+          "timestamp": "2026-03-17T21:46:21.303650+00:00",
+          "distance_mm": 994
+        },
+        {
+          "timestamp": "2026-03-17T21:46:21.613425+00:00",
+          "distance_mm": 986
+        },
+        {
+          "timestamp": "2026-03-17T21:46:21.922473+00:00",
+          "distance_mm": 990
+        },
+        {
+          "timestamp": "2026-03-17T21:46:22.234727+00:00",
+          "distance_mm": 993
+        },
+        {
+          "timestamp": "2026-03-17T21:46:22.543174+00:00",
+          "distance_mm": 991
+        },
+        {
+          "timestamp": "2026-03-17T21:46:22.855182+00:00",
+          "distance_mm": 989
+        },
+        {
+          "timestamp": "2026-03-17T21:46:23.164648+00:00",
+          "distance_mm": 987
+        },
+        {
+          "timestamp": "2026-03-17T21:46:23.476817+00:00",
+          "distance_mm": 990
+        },
+        {
+          "timestamp": "2026-03-17T21:46:23.789900+00:00",
+          "distance_mm": 988
+        },
+        {
+          "timestamp": "2026-03-17T21:46:24.099961+00:00",
+          "distance_mm": 990
+        },
+        {
+          "timestamp": "2026-03-17T21:46:24.414274+00:00",
+          "distance_mm": 984
+        },
+        {
+          "timestamp": "2026-03-17T21:46:24.726355+00:00",
+          "distance_mm": 991
+        },
+        {
+          "timestamp": "2026-03-17T21:46:25.040975+00:00",
+          "distance_mm": 988
+        },
+        {
+          "timestamp": "2026-03-17T21:46:25.355724+00:00",
+          "distance_mm": 993
+        },
+        {
+          "timestamp": "2026-03-17T21:46:25.672227+00:00",
+          "distance_mm": 989
+        },
+        {
+          "timestamp": "2026-03-17T21:46:25.983135+00:00",
+          "distance_mm": 990
+        },
+        {
+          "timestamp": "2026-03-17T21:46:26.294265+00:00",
+          "distance_mm": 993
+        },
+        {
+          "timestamp": "2026-03-17T21:46:26.601339+00:00",
+          "distance_mm": 990
+        },
+        {
+          "timestamp": "2026-03-17T21:46:27.014432+00:00",
+          "distance_mm": 990
+        },
+        {
+          "timestamp": "2026-03-17T21:46:27.640055+00:00",
+          "distance_mm": 986
+        },
+        {
+          "timestamp": "2026-03-17T21:46:27.955473+00:00",
+          "distance_mm": 991
+        },
+        {
+          "timestamp": "2026-03-17T21:46:28.267116+00:00",
+          "distance_mm": 987
+        },
+        {
+          "timestamp": "2026-03-17T21:46:28.580784+00:00",
+          "distance_mm": 989
+        },
+        {
+          "timestamp": "2026-03-17T21:46:28.887013+00:00",
+          "distance_mm": 992
+        },
+        {
+          "timestamp": "2026-03-17T21:46:29.194217+00:00",
+          "distance_mm": 988
+        },
+        {
+          "timestamp": "2026-03-17T21:46:29.505984+00:00",
+          "distance_mm": 991
+        },
+        {
+          "timestamp": "2026-03-17T21:46:29.816931+00:00",
+          "distance_mm": 992
+        }
+      ],
+      "stats": {
+        "mean": 989.8,
+        "std": 2.4,
+        "min": 984,
+        "max": 994
+      },
+      "notes": ""
+    },
+    {
+      "name": "telemetry_integration",
+      "status": "pass",
+      "telemetry_snapshot": {
+        "battery_pct": 82,
+        "height_cm": 0,
+        "tof_cm": 10,
+        "temp_c": 59.5,
+        "pitch": 0.0,
+        "roll": 0.0,
+        "yaw": 11.0,
+        "flight_time_s": 0,
+        "timestamp": "2026-03-17T21:46:30.132944+00:00",
+        "forward_tof_mm": 988
+      },
+      "notes": ""
+    }
+  ],
+  "sensor_characterization": {
+    "effective_range_mm": {
+      "min": 157,
+      "max": 994
+    },
+    "noise_std_mm": 2.4,
+    "noise_mean_mm": 989.8,
+    "response_latency_note": "estimated from sampling interval"
+  }
+}

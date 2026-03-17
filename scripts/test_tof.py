@@ -14,7 +14,6 @@ import asyncio
 import json
 import statistics
 import sys
-import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -268,15 +267,20 @@ def run_test_6(
     battery: int | None,
     tello: Any,
 ) -> dict:
-    """Test 6: Flight DANGER Stop — full safety pipeline.
+    """Test 6: Flight sensor check — incremental approach with discrete reads.
 
-    Starts the ObstacleMonitor for continuous protection during flight.
-    The monitor polls at ~3.2 Hz and calls drone.stop() immediately
-    when a DANGER reading is detected — preventing wall collisions
-    even during long move commands.
+    Advances in 20cm increments toward a wall, checking the sensor between
+    each move. Does NOT use the ObstacleMonitor during flight because the
+    Tello SDK's single UDP command channel cannot handle concurrent sensor
+    polls and movement commands (responses get crossed). See
+    project_sdk_command_contention.md for details.
+
+    The ObstacleMonitor's debouncing and safety logic are fully validated
+    by 36 unit tests. This test validates the sensor hardware at flight
+    altitude with the revised thresholds.
     """
     print("\n" + "─" * 60)
-    print("TEST 6: Flight DANGER Stop (OPTIONAL)")
+    print("TEST 6: Flight Sensor Check (OPTIONAL)")
     print("─" * 60)
 
     # Battery gate
@@ -295,7 +299,6 @@ def run_test_6(
         input(
             "\n  FLIGHT TEST. Place drone on flat surface "
             "facing a wall (~0.9m / ~3ft away).\n"
-            "  The ObstacleMonitor will protect the drone during flight.\n"
             "  Drone will advance in 20cm (~8in) increments.\n"
             "  Ready to fly? (y/n): "
         )
@@ -382,49 +385,20 @@ def run_test_6(
     print(f"  Stabilizing ({TAKEOFF_DELAY}s)...")
     time.sleep(TAKEOFF_DELAY)
 
-    # Start ObstacleMonitor in a background thread with its own event loop.
-    # The monitor needs a persistent event loop for continuous polling.
-    # The main thread stays synchronous for blocking drone.move() calls.
-    monitor_danger_triggered = False
-    monitor_readings: list[ObstacleReading] = []
-
-    def on_monitor_reading(reading: ObstacleReading) -> None:
-        nonlocal monitor_danger_triggered
-        monitor_readings.append(reading)
-        if reading.zone.value == "danger":
-            monitor_danger_triggered = True
-            print(
-                f"  ** MONITOR: DANGER at {reading.distance_mm}mm "
-                f"({mm_to_imperial(reading.distance_mm)}) — drone.stop() called **"
-            )
-
-    monitor.on_reading(on_monitor_reading)
-
-    # Run monitor in a background thread with its own event loop
-    monitor_loop = asyncio.new_event_loop()
-
-    def run_monitor_loop() -> None:
-        asyncio.set_event_loop(monitor_loop)
-        monitor_loop.run_until_complete(monitor.start())
-        monitor_loop.run_forever()
-
-    monitor_thread = threading.Thread(target=run_monitor_loop, daemon=True)
-    print("  Starting ObstacleMonitor (continuous protection)...")
-    monitor_thread.start()
-    time.sleep(0.5)  # allow a few poll cycles to confirm monitor is running
-    print(f"  Monitor active — {len(monitor_readings)} readings so far")
-
     danger_triggered = False
     chosen_response = None
     action_result = None
 
-    # Incremental approach: 20cm moves with sensor checks between each.
+    # Incremental approach: 20cm moves with discrete sensor checks.
+    # No ObstacleMonitor — SDK command channel cannot handle concurrent
+    # sensor polls and movement commands (see project_sdk_command_contention.md).
     # Max 3 increments (60cm) without sensor contact — if the sensor
     # reads 8190 the entire time, it's blind at flight altitude and
     # we must stop (remaining distance ~300mm, safely above DANGER).
     increment_cm = 20
     max_blind_increments = 3
-    sensor_contacted = False  # True once sensor returns a non-8190 reading
+    sensor_contacted = False
+    total_moved_cm = 0
 
     try:
         prompt("Drone is hovering. It will advance in 20cm (~8in) increments toward the wall.")
@@ -440,23 +414,13 @@ def run_test_6(
                 sensor_contacted = True
 
         # Incremental forward movement
-        total_moved_cm = 0
         blind_increments = 0
 
-        while not danger_triggered and not monitor_danger_triggered:
+        while not danger_triggered:
             total_moved_cm += increment_cm
             print(f"  Moving forward {increment_cm}cm (~{mm_to_imperial(increment_cm * 10)})...")
             drone.move("forward", increment_cm)
             time.sleep(COMMAND_DELAY)
-
-            # Check if monitor caught DANGER during the move
-            if monitor_danger_triggered:
-                danger_triggered = True
-                distance_checks.append(
-                    {"phase": f"after_{total_moved_cm}cm", "distance_mm": None, "zone": "danger"}
-                )
-                print(f"  After {total_moved_cm}cm: DANGER caught by monitor during move")
-                break
 
             # Discrete sensor check after the move
             r = read_distance(drone)
@@ -464,7 +428,11 @@ def run_test_6(
                 mm = r["distance_mm"]
                 zone = monitor.classify_zone(mm)
                 distance_checks.append(
-                    {"phase": f"after_{total_moved_cm}cm", "distance_mm": mm, "zone": zone.value}
+                    {
+                        "phase": f"after_{total_moved_cm}cm",
+                        "distance_mm": mm,
+                        "zone": zone.value,
+                    }
                 )
                 print(
                     f"  After {total_moved_cm}cm: {mm}mm "
@@ -473,7 +441,7 @@ def run_test_6(
 
                 if mm < OUT_OF_RANGE_MIN:
                     sensor_contacted = True
-                    blind_increments = 0  # reset blind counter
+                    blind_increments = 0
                     if zone.value == "danger":
                         danger_triggered = True
                         break
@@ -482,14 +450,18 @@ def run_test_6(
             else:
                 blind_increments += 1
                 distance_checks.append(
-                    {"phase": f"after_{total_moved_cm}cm", "distance_mm": None, "zone": "error"}
+                    {
+                        "phase": f"after_{total_moved_cm}cm",
+                        "distance_mm": None,
+                        "zone": "error",
+                    }
                 )
 
             # Safety gate: stop if sensor is blind for too many increments
             if not sensor_contacted and blind_increments >= max_blind_increments:
                 print(
-                    f"\n  SENSOR BLIND — {blind_increments} consecutive increments "
-                    f"with no wall detection. Landing safely."
+                    f"\n  SENSOR BLIND — {blind_increments} consecutive "
+                    f"increments with no wall detection. Landing safely."
                 )
                 print(
                     f"  (Moved {total_moved_cm}cm total, estimated "
@@ -498,30 +470,17 @@ def run_test_6(
                 drone.safe_land()
                 break
 
-        # Stop the monitor
-        asyncio.run_coroutine_threadsafe(monitor.stop(), monitor_loop).result(timeout=5)
-        monitor_loop.call_soon_threadsafe(monitor_loop.stop)
-        monitor_thread.join(timeout=5)
-        print(f"  ObstacleMonitor stopped ({len(monitor_readings)} total readings).")
-
         if danger_triggered:
-            print("\n  DANGER DETECTED")
-            if monitor_danger_triggered:
-                print("  (Caught by ObstacleMonitor — drone was stopped mid-flight)")
-            print("  Presenting options menu...")
-            # Use monitor's last reading if available, else use last distance check
-            if monitor_readings and monitor_readings[-1].zone.value == "danger":
-                reading = monitor_readings[-1]
-            else:
-                last_check = next(
-                    (c for c in reversed(distance_checks) if c["distance_mm"] is not None),
-                    distance_checks[-1],
-                )
-                reading = ObstacleReading(
-                    distance_mm=last_check["distance_mm"] or 0,
-                    zone=monitor.classify_zone(last_check["distance_mm"] or 0),
-                    timestamp=datetime.now(UTC),
-                )
+            print("\n  DANGER DETECTED — presenting options menu")
+            last_check = next(
+                (c for c in reversed(distance_checks) if c["distance_mm"] is not None),
+                distance_checks[-1],
+            )
+            reading = ObstacleReading(
+                distance_mm=last_check["distance_mm"] or 0,
+                zone=monitor.classify_zone(last_check["distance_mm"] or 0),
+                timestamp=datetime.now(UTC),
+            )
             provider = CLIResponseProvider()
             choice = asyncio.run(provider.present_options(reading))
             chosen_response = choice.value
@@ -531,20 +490,18 @@ def run_test_6(
         elif not sensor_contacted:
             print("\n  Sensor could not detect wall at flight altitude.")
             print("  This is a known VL53L0X limitation (25-degree FOV cone).")
+            print("  See project_tof_flight_altitude_limitation.md")
 
     except Exception as e:
         print(f"\n  ERROR during flight: {e}")
         print("  Emergency landing...")
-        asyncio.run_coroutine_threadsafe(monitor.stop(), monitor_loop).result(timeout=5)
-        monitor_loop.call_soon_threadsafe(monitor_loop.stop)
-        monitor_thread.join(timeout=5)
         drone.safe_land()
         return {
             "name": "flight_danger_stop",
             "status": "fail",
             "distance_checks": distance_checks,
-            "monitor_readings_count": len(monitor_readings),
-            "monitor_danger_triggered": monitor_danger_triggered,
+            "total_moved_cm": total_moved_cm,
+            "sensor_contacted": sensor_contacted,
             "takeoff_raw_result": takeoff_result,
             "height_after_takeoff_cm": height_after_takeoff,
             "battery_at_takeoff": battery,
@@ -554,10 +511,7 @@ def run_test_6(
 
     if danger_triggered:
         status = "pass"
-        if monitor_danger_triggered:
-            notes = "DANGER caught by ObstacleMonitor (continuous protection)"
-        else:
-            notes = "DANGER detected by discrete sensor check"
+        notes = "DANGER detected by discrete sensor check"
     elif not sensor_contacted:
         status = "sensor_blind"
         notes = "Sensor returned 8190 at flight altitude — VL53L0X FOV limitation"
@@ -574,8 +528,6 @@ def run_test_6(
         "sensor_contacted": sensor_contacted,
         "distance_checks": distance_checks,
         "danger_triggered": danger_triggered,
-        "monitor_danger_triggered": monitor_danger_triggered,
-        "monitor_readings_count": len(monitor_readings),
         "chosen_response": chosen_response,
         "action_result": action_result,
         "takeoff_raw_result": takeoff_result,
