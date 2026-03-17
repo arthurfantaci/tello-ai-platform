@@ -14,6 +14,7 @@ import asyncio
 import json
 import statistics
 import sys
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -293,7 +294,7 @@ def run_test_6(
     resp = (
         input(
             "\n  FLIGHT TEST. Place drone on flat surface "
-            "facing a wall (~2m / ~6.5ft away).\n"
+            "facing a wall (~1.5m / ~5ft away).\n"
             "  The ObstacleMonitor will protect the drone during flight.\n"
             "  Ready to fly? (y/n): "
         )
@@ -380,9 +381,9 @@ def run_test_6(
     print(f"  Stabilizing ({TAKEOFF_DELAY}s)...")
     time.sleep(TAKEOFF_DELAY)
 
-    # Start ObstacleMonitor for continuous protection during flight.
-    # The monitor polls at ~3.2 Hz and calls drone.stop() when DANGER
-    # is detected — this prevents collisions during move commands.
+    # Start ObstacleMonitor in a background thread with its own event loop.
+    # The monitor needs a persistent event loop for continuous polling.
+    # The main thread stays synchronous for blocking drone.move() calls.
     monitor_danger_triggered = False
     monitor_readings: list[ObstacleReading] = []
 
@@ -397,8 +398,20 @@ def run_test_6(
             )
 
     monitor.on_reading(on_monitor_reading)
+
+    # Run monitor in a background thread with its own event loop
+    monitor_loop = asyncio.new_event_loop()
+
+    def run_monitor_loop() -> None:
+        asyncio.set_event_loop(monitor_loop)
+        monitor_loop.run_until_complete(monitor.start())
+        monitor_loop.run_forever()
+
+    monitor_thread = threading.Thread(target=run_monitor_loop, daemon=True)
     print("  Starting ObstacleMonitor (continuous protection)...")
-    asyncio.run(monitor.start())
+    monitor_thread.start()
+    time.sleep(0.5)  # allow a few poll cycles to confirm monitor is running
+    print(f"  Monitor active — {len(monitor_readings)} readings so far")
 
     danger_triggered = False
     chosen_response = None
@@ -455,8 +468,10 @@ def run_test_6(
             danger_triggered = True
 
         # Stop the monitor before presenting options
-        asyncio.run(monitor.stop())
-        print("  ObstacleMonitor stopped.")
+        asyncio.run_coroutine_threadsafe(monitor.stop(), monitor_loop).result(timeout=5)
+        monitor_loop.call_soon_threadsafe(monitor_loop.stop)
+        monitor_thread.join(timeout=5)
+        print(f"  ObstacleMonitor stopped ({len(monitor_readings)} total readings).")
 
         if danger_triggered:
             print("\n  DANGER DETECTED")
@@ -486,7 +501,9 @@ def run_test_6(
     except Exception as e:
         print(f"\n  ERROR during flight: {e}")
         print("  Emergency landing...")
-        asyncio.run(monitor.stop())
+        asyncio.run_coroutine_threadsafe(monitor.stop(), monitor_loop).result(timeout=5)
+        monitor_loop.call_soon_threadsafe(monitor_loop.stop)
+        monitor_thread.join(timeout=5)
         drone.safe_land()
         return {
             "name": "flight_danger_stop",
