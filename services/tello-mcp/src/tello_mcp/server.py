@@ -17,8 +17,9 @@ from tello_core.config import configure_structlog
 from tello_core.redis_client import create_redis_client
 from tello_mcp.config import TelloMcpConfig
 from tello_mcp.drone import DroneAdapter
-from tello_mcp.obstacle import ObstacleConfig, ObstacleMonitor
+from tello_mcp.obstacle import ObstacleConfig, ObstacleMonitor, ObstacleResponseHandler
 from tello_mcp.queue import CommandQueue
+from tello_mcp.strategies import SimpleReverseRTH
 from tello_mcp.telemetry import TelemetryPublisher
 from tello_mcp.tools import connection, expansion, flight, sensors
 
@@ -54,6 +55,17 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
         stream=config.events_stream,
     )
 
+    # Wire obstacle avoidance: strategy → handler → monitor callback
+    last_command: dict[str, str | int] = {}
+    strategy = SimpleReverseRTH()
+    handler = ObstacleResponseHandler(
+        drone=drone,
+        rth_strategy=strategy,
+        telemetry=telemetry,
+        last_command=last_command,
+    )
+    monitor.on_reading(handler.on_obstacle_reading)
+
     # Start queue consumer — without this, all enqueue() calls hang forever
     queue_task = asyncio.create_task(queue.start())
 
@@ -77,6 +89,8 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
             "telemetry": telemetry,
             "config": config,
             "monitor": monitor,
+            "handler": handler,
+            "last_command": last_command,
         }
     finally:
         await monitor.stop()

@@ -38,6 +38,7 @@ class TestFlightTools:
             "queue": overrides.get("queue", AsyncMock()),
             "telemetry": overrides.get("telemetry", AsyncMock()),
             "config": overrides.get("config", MagicMock()),
+            "last_command": overrides.get("last_command", {}),
         }
         return ctx
 
