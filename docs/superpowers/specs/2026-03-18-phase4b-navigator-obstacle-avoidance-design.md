@@ -19,13 +19,15 @@ The ObstacleMonitor polls `get_forward_distance()` via `asyncio.to_thread()` whi
 
 ### Solution
 
-Add `threading.Lock` to DroneAdapter. Every method that calls djitellopy acquires the lock before executing.
+Add `threading.RLock` (reentrant lock) to DroneAdapter. Every method that calls djitellopy acquires the lock before executing.
+
+**Why RLock, not Lock:** `get_telemetry()` internally calls `get_forward_distance()`. With a non-reentrant `threading.Lock`, the same thread would deadlock trying to acquire the lock twice. `threading.RLock` allows the same thread to re-enter — it counts acquisitions and only truly releases when the count returns to zero.
 
 ### Changes
 
 **File:** `services/tello-mcp/src/tello_mcp/drone.py`
 
-- Add `self._command_lock = threading.Lock()` to `__init__`
+- Add `self._command_lock = threading.RLock()` to `__init__`
 - Wrap all SDK-calling methods with `with self._command_lock:`:
   - `connect`, `disconnect`, `keepalive`
   - `takeoff`, `land`, `safe_land`, `emergency`, `stop` (new)
@@ -80,41 +82,77 @@ class ReturnToHomeStrategy(Protocol):
     def return_to_home(self, drone: DroneAdapter, context: ObstacleContext) -> dict: ...
 
 class SimpleReverseRTH:
-    """Phase 4b strategy: stop, reverse last movement, land."""
+    """Phase 4b strategy: stop, reverse last movement, land.
+
+    This strategy focuses on drone commands only. Event publishing
+    (obstacle_danger, land) is handled by ObstacleResponseHandler
+    after the strategy returns — keeping the strategy pure and the
+    handler responsible for side effects.
+    """
 
     def return_to_home(self, drone: DroneAdapter, context: ObstacleContext) -> dict:
+        reversed_direction: str | None = None
         # Reverse the last movement (skip if no movement recorded)
         if context.last_direction and context.last_distance_cm > 0:
-            opposite = _opposite_direction(context.last_direction)
-            drone.move(opposite, context.last_distance_cm)
+            reversed_direction = _opposite_direction(context.last_direction)
+            move_result = drone.move(reversed_direction, context.last_distance_cm)
+            if "error" in move_result:
+                logger.warning("RTH reverse failed: %s — proceeding to land", move_result)
         drone.land()
         return {
             "status": "returned",
             "method": "simple_reverse",
-            "reversed_direction": opposite if context.last_direction else None,
+            "reversed_direction": reversed_direction,
             "height_cm": context.height_cm,
             "forward_distance_mm": context.forward_distance_mm,
             "landed": True,
         }
 ```
 
+**Queue bypass rationale:** `SimpleReverseRTH` calls `drone.move()` and `drone.land()` directly, bypassing the MCP `CommandQueue`. This is by design — RTH executes during a safety-critical path where queue delays are unacceptable. The `threading.RLock` on DroneAdapter provides the necessary serialization to prevent UDP contention.
+
+**Error handling:** If `drone.move()` fails during the reverse (returns an error dict), RTH logs the failure and proceeds to `drone.land()`. A failed reverse is recoverable (the drone is still hovering), but a failed land is not — so we always attempt landing regardless.
+
 ### Context Population
 
 - MCP flight tools (`move`, `rotate`, `go_to_mission_pad`) update a shared `last_command` dict on the lifespan context after each execution.
 - When DANGER triggers, ObstacleMonitor builds `ObstacleContext` by:
   - Reading `last_command` for direction and distance
-  - Calling `drone.get_telemetry()` for `height_cm` (serialized through the lock)
+  - Calling `drone.get_height()` for `height_cm` (new lightweight method — avoids `get_telemetry()` which internally calls `get_forward_distance()`, wasting a poll cycle)
   - Using the DANGER reading for `forward_distance_mm`
   - Reading `mission_id` and `room_id` from lifespan context
 - If no `last_command` exists (DANGER during hover), RTH skips reverse and just lands.
+
+### New DroneAdapter Method
+
+Add `get_height() -> dict` to DroneAdapter — a lightweight altitude query that reads only the downward ToF, avoiding the overhead of `get_telemetry()`:
+
+```python
+def get_height(self) -> dict:
+    with self._command_lock:
+        if err := self._require_connection():
+            return err
+        try:
+            height = self._tello.get_distance_tof()
+            return {"status": "ok", "height_cm": height}
+        except Exception as exc:
+            logger.exception("get_height failed")
+            return {"error": "HEIGHT_FAILED", "detail": str(exc)}
+```
 
 ### Handler Integration
 
 **File:** `services/tello-mcp/src/tello_mcp/obstacle.py`
 
-- `ObstacleResponseHandler.__init__` receives `rth_strategy: ReturnToHomeStrategy`
-- `RETURN_TO_HOME` case: `self._rth.return_to_home(drone, context)`
+- `ObstacleResponseHandler.__init__` receives `rth_strategy: ReturnToHomeStrategy` and `telemetry: TelemetryPublisher`
+- `RETURN_TO_HOME` case:
+  1. Call `self._rth.return_to_home(drone, context)` — strategy handles drone commands
+  2. Publish `obstacle_danger` event via `self._telemetry.publish_event(...)` — handler handles side effects
+  3. Publish `land` event via `self._telemetry.publish_event("land", {})` — closes the FlightSession
 - `EMERGENCY_LAND` and `MANUAL_OVERRIDE` unchanged
+- The handler is the single place responsible for event publishing. Strategies stay pure (drone commands only).
+
+**Monitor-to-handler wiring:** The `ObstacleResponseHandler.handle()` method is registered as a callback on the monitor via `monitor.on_reading(handler.on_obstacle_reading)`. When the monitor detects DANGER, the callback fires, the handler builds `ObstacleContext`, selects the configured response, and dispatches to the strategy.
 
 ### Startup Wiring
 
@@ -122,7 +160,13 @@ class SimpleReverseRTH:
 
 ```python
 strategy = SimpleReverseRTH()
-handler = ObstacleResponseHandler(drone=drone, rth_strategy=strategy)
+handler = ObstacleResponseHandler(
+    drone=drone,
+    rth_strategy=strategy,
+    telemetry=telemetry_publisher,
+)
+monitor = ObstacleMonitor(drone=drone, config=obstacle_config)
+monitor.on_reading(handler.on_obstacle_reading)
 ```
 
 ### Future Enhancement Path
@@ -164,7 +208,7 @@ Uses the existing `tello:events` stream — no new infrastructure.
 
 Add `await telemetry.publish_event("land", {})` to:
 - The `land()` MCP tool in `tools/flight.py`
-- `SimpleReverseRTH.return_to_home()` after `drone.land()` (since RTH calls the adapter directly, not the MCP tool)
+- `ObstacleResponseHandler.handle()` after the RTH strategy returns (the handler publishes, not the strategy — keeping strategies pure)
 
 This closes the gap where FlightSessions never receive an `end_time`.
 
@@ -224,9 +268,8 @@ class ObstacleIncident(BaseModel):
 
 ### Files Touched
 
-- Modified: `services/tello-mcp/src/tello_mcp/obstacle.py` (publish event after response)
+- Modified: `services/tello-mcp/src/tello_mcp/obstacle.py` (publish obstacle_danger + land events after response)
 - Modified: `services/tello-mcp/src/tello_mcp/tools/flight.py` (land event)
-- Modified: `services/tello-mcp/src/tello_mcp/strategies.py` (RTH publishes land event)
 - Modified: `services/tello-telemetry/src/tello_telemetry/consumer.py` (obstacle_danger route)
 - Modified: `services/tello-telemetry/src/tello_telemetry/session_repo.py` (add_obstacle_incident)
 - Modified: `packages/tello-core/src/tello_core/models.py` (ObstacleIncident model)
@@ -243,21 +286,22 @@ tello-telemetry MUST be running during all physical tests, integration tests, an
 
 | Test | Verifies |
 |------|----------|
-| `test_drone_command_lock` | Two concurrent calls execute sequentially via lock |
+| `test_drone_command_rlock` | Two concurrent calls execute sequentially via RLock; reentrant call from get_telemetry→get_forward_distance does not deadlock |
 | `test_drone_stop_method` | `stop()` exists and calls `send_control_command("stop")` |
 | `test_obstacle_context_built` | ObstacleContext includes height_cm, forward_distance_mm, last_direction, last_distance_cm |
 | `test_simple_reverse_rth` | `return_to_home()` calls `move(opposite)` then `land()` in order |
 | `test_simple_reverse_rth_no_last_command` | RTH skips reverse and just lands when no movement recorded |
 | `test_obstacle_event_published` | Response handler calls `publish_event("obstacle_danger", ...)` with correct fields |
 | `test_land_event_published` | `land()` tool publishes `"land"` event |
-| `test_rth_publishes_land_event` | SimpleReverseRTH publishes land event after landing |
+| `test_rth_error_handling` | If drone.move() fails during reverse, RTH logs warning and still calls land() |
+| `test_handler_publishes_obstacle_and_land_events` | ObstacleResponseHandler publishes both obstacle_danger and land events after RTH completes |
 
 **tello-telemetry tests:**
 
 | Test | Verifies |
 |------|----------|
 | `test_handle_obstacle_event` | `obstacle_danger` event routed to `_handle_obstacle()`, calls repo correctly |
-| `test_handle_land_event` | `land` event calls `repo.end_session()` |
+| `test_handle_land_event` | `land` event calls `repo.end_session()` (regression guard — consumer routing already exists, but was never exercised because land events were never published) |
 | `test_obstacle_incident_cypher` | `add_obstacle_incident()` generates correct Cypher with TRIGGERED_DURING |
 
 ### Integration Tests (real Redis + real Neo4j)
@@ -307,7 +351,7 @@ Three-stage script:
 - `testing/test_phase4b.py`
 
 ### Modified Files
-- `services/tello-mcp/src/tello_mcp/drone.py` (lock + stop method)
+- `services/tello-mcp/src/tello_mcp/drone.py` (RLock + stop method + get_height method)
 - `services/tello-mcp/src/tello_mcp/obstacle.py` (handler + context + event publishing)
 - `services/tello-mcp/src/tello_mcp/tools/flight.py` (last_command tracking + land event)
 - `services/tello-mcp/src/tello_mcp/server.py` (strategy injection)
