@@ -36,7 +36,21 @@ pytestmark = pytest.mark.skipif(
 async def setup_integration():
     """Set up real Redis + Neo4j for integration testing."""
     r = aioredis.from_url(REDIS_URL, decode_responses=True)
+
+    # Skip if infrastructure is not available (e.g. CI without Docker)
+    try:
+        await r.ping()
+    except Exception:
+        await r.aclose()
+        pytest.skip("Redis not available — skipping integration test")
+
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASS))
+    try:
+        driver.verify_connectivity()
+    except Exception:
+        await r.aclose()
+        driver.close()
+        pytest.skip("Neo4j not available — skipping integration test")
 
     # Clean up test data
     await r.delete(TEST_STREAM)
