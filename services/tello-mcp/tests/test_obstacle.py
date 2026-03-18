@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -16,6 +16,7 @@ from tello_mcp.obstacle import (
     ObstacleResponse,
     ObstacleResponseHandler,
 )
+from tello_mcp.strategies import ObstacleContext
 
 
 class TestObstacleConfig:
@@ -213,17 +214,104 @@ class TestObstacleResponseHandler:
         result = await handler.execute(ObstacleResponse.MANUAL_OVERRIDE)
         assert result["status"] == "ok"
 
-    async def test_execute_return_to_home_not_implemented(self):
+    async def test_execute_return_to_home_not_configured(self):
         drone = MagicMock()
         handler = ObstacleResponseHandler(drone)
         result = await handler.execute(ObstacleResponse.RETURN_TO_HOME)
-        assert result["error"] == "NOT_IMPLEMENTED"
+        assert result["error"] == "NOT_CONFIGURED"
 
     async def test_execute_avoid_and_continue_not_implemented(self):
         drone = MagicMock()
         handler = ObstacleResponseHandler(drone)
         result = await handler.execute(ObstacleResponse.AVOID_AND_CONTINUE)
         assert result["error"] == "NOT_IMPLEMENTED"
+
+
+class TestObstacleResponseHandlerDI:
+    """Tests for the updated handler with DI and event publishing."""
+
+    def _make_handler(self):
+        drone = MagicMock()
+        drone.safe_land.return_value = {"status": "ok"}
+        strategy = MagicMock()
+        strategy.return_to_home.return_value = {
+            "status": "returned",
+            "method": "simple_reverse",
+            "reversed_direction": "back",
+            "height_cm": 80,
+            "forward_distance_mm": 185,
+            "landed": True,
+        }
+        telemetry = AsyncMock()
+        telemetry.publish_event = AsyncMock()
+        handler = ObstacleResponseHandler(
+            drone=drone,
+            rth_strategy=strategy,
+            telemetry=telemetry,
+        )
+        return handler, drone, strategy, telemetry
+
+    async def test_return_to_home_calls_strategy(self):
+        handler, drone, strategy, _tel = self._make_handler()
+        ctx = ObstacleContext(
+            last_direction="forward",
+            last_distance_cm=100,
+            height_cm=80,
+            forward_distance_mm=185,
+        )
+        result = await handler.execute(ObstacleResponse.RETURN_TO_HOME, ctx)
+        strategy.return_to_home.assert_called_once_with(drone, ctx)
+        assert result["status"] == "returned"
+
+    async def test_return_to_home_publishes_obstacle_event(self):
+        handler, _drone, _strategy, telemetry = self._make_handler()
+        ctx = ObstacleContext(
+            last_direction="forward",
+            last_distance_cm=100,
+            height_cm=80,
+            forward_distance_mm=185,
+            mission_id="m1",
+            room_id="living-room",
+        )
+        await handler.execute(ObstacleResponse.RETURN_TO_HOME, ctx)
+        calls = telemetry.publish_event.call_args_list
+        event_types = [c[0][0] for c in calls]
+        assert "obstacle_danger" in event_types
+        assert "land" in event_types
+
+    async def test_emergency_land_still_works(self):
+        handler, drone, _strategy, _tel = self._make_handler()
+        result = await handler.execute(ObstacleResponse.EMERGENCY_LAND)
+        drone.safe_land.assert_called_once()
+        assert result["status"] == "ok"
+
+    async def test_manual_override_still_works(self):
+        handler, _drone, _strategy, _tel = self._make_handler()
+        result = await handler.execute(ObstacleResponse.MANUAL_OVERRIDE)
+        assert result["status"] == "ok"
+
+    async def test_on_obstacle_reading_triggers_rth_on_danger(self):
+        handler, drone, strategy, _tel = self._make_handler()
+        handler._last_command = {"direction": "forward", "distance_cm": 100}
+        drone.get_height.return_value = {"status": "ok", "height_cm": 80}
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 18),
+        )
+        await handler.on_obstacle_reading(reading)
+        strategy.return_to_home.assert_called_once()
+
+    async def test_on_obstacle_reading_ignores_non_danger(self):
+        handler, _drone, strategy, _tel = self._make_handler()
+        reading = ObstacleReading(
+            distance_mm=400,
+            zone=ObstacleZone.CAUTION,
+            timestamp=datetime(2026, 3, 18),
+        )
+        await handler.on_obstacle_reading(reading)
+        strategy.return_to_home.assert_not_called()
 
 
 class TestObstacleMonitorDebounce:

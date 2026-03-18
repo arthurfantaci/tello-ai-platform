@@ -18,11 +18,13 @@ from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 import structlog
 
 from tello_core.models import ObstacleReading, ObstacleZone
+from tello_mcp.strategies import ObstacleContext, ReturnToHomeStrategy
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from tello_mcp.drone import DroneAdapter
+    from tello_mcp.telemetry import TelemetryPublisher
 
 logger = structlog.get_logger("tello_mcp.obstacle")
 
@@ -191,31 +193,88 @@ class ObstacleResponse(StrEnum):
 class ObstacleResponseHandler:
     """Executes obstacle response actions.
 
-    Phase 4a: emergency_land + manual_override working.
-    Phase 4b: return_to_home + avoid_and_continue (navigator integration).
+    Receives a ReturnToHomeStrategy via DI. Handles event publishing
+    after the strategy executes (strategies stay pure — drone commands only).
     """
 
-    def __init__(self, drone: DroneAdapter) -> None:
+    def __init__(
+        self,
+        drone: DroneAdapter,
+        rth_strategy: ReturnToHomeStrategy | None = None,
+        telemetry: TelemetryPublisher | None = None,
+        last_command: dict | None = None,
+    ) -> None:
         self._drone = drone
+        self._rth = rth_strategy
+        self._telemetry = telemetry
+        self._last_command = last_command
 
-    async def execute(self, choice: ObstacleResponse) -> dict:
+    async def execute(
+        self,
+        choice: ObstacleResponse,
+        context: ObstacleContext | None = None,
+    ) -> dict:
         """Execute the chosen obstacle response."""
         match choice:
             case ObstacleResponse.EMERGENCY_LAND:
                 return await asyncio.to_thread(self._drone.safe_land)
             case ObstacleResponse.RETURN_TO_HOME:
-                return {
-                    "error": "NOT_IMPLEMENTED",
-                    "detail": "Phase 4b -- requires navigator integration",
-                }
+                if self._rth is None or context is None:
+                    return {
+                        "error": "NOT_CONFIGURED",
+                        "detail": "RTH strategy or context not provided",
+                    }
+                result = await asyncio.to_thread(self._rth.return_to_home, self._drone, context)
+                if self._telemetry is not None:
+                    await self._telemetry.publish_event(
+                        "obstacle_danger",
+                        {
+                            "forward_distance_mm": str(context.forward_distance_mm),
+                            "forward_distance_in": str(
+                                round(context.forward_distance_mm / 25.4, 1)
+                            ),
+                            "height_cm": str(context.height_cm),
+                            "zone": "DANGER",
+                            "response": "RETURN_TO_HOME",
+                            "outcome": result.get("status", "unknown"),
+                            "mission_id": context.mission_id or "",
+                            "room_id": context.room_id or "",
+                            "reversed_direction": result.get("reversed_direction", ""),
+                        },
+                    )
+                    await self._telemetry.publish_event("land", {})
+                return result
             case ObstacleResponse.AVOID_AND_CONTINUE:
                 return {
                     "error": "NOT_IMPLEMENTED",
-                    "detail": "Phase 4b -- requires navigator integration",
+                    "detail": "Deferred to Phase 5+",
                 }
             case ObstacleResponse.MANUAL_OVERRIDE:
                 logger.info("obstacle.manual_override")
                 return {"status": "ok", "detail": "Manual control resumed"}
+
+    async def on_obstacle_reading(self, reading: ObstacleReading) -> None:
+        """Callback for ObstacleMonitor — auto-triggers RTH on DANGER.
+
+        Registered via monitor.on_reading(handler.on_obstacle_reading).
+        Builds ObstacleContext from lifespan state and dispatches to execute().
+        """
+        if reading.zone != ObstacleZone.DANGER:
+            return
+
+        last_cmd = self._last_command or {}
+        height_result = await asyncio.to_thread(self._drone.get_height)
+        height_cm = height_result.get("height_cm", 0) if height_result.get("status") == "ok" else 0
+
+        context = ObstacleContext(
+            last_direction=last_cmd.get("direction", ""),
+            last_distance_cm=int(last_cmd.get("distance_cm", 0)),
+            height_cm=height_cm,
+            forward_distance_mm=reading.distance_mm,
+            mission_id=last_cmd.get("mission_id"),
+            room_id=last_cmd.get("room_id"),
+        )
+        await self.execute(ObstacleResponse.RETURN_TO_HOME, context)
 
 
 @runtime_checkable
