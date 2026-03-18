@@ -13,6 +13,26 @@
             "description": "Warns when Bash commands target wrong working directory"
           }
         ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.claude/hooks/require-issue-and-branch.sh \"$TOOL_INPUT\"",
+            "description": "Blocks implementation code edits on main branch"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.claude/hooks/require-issue-and-branch.sh \"$TOOL_INPUT\"",
+            "description": "Blocks implementation code edits on main branch"
+          }
+        ]
       }
     ]
   }

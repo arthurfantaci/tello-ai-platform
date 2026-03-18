@@ -48,6 +48,14 @@ TAKEOFF_DELAY = 3.0
 COMMAND_DELAY = 0.5
 
 
+def mm_to_imperial(mm: int) -> str:
+    """Convert mm to approximate imperial string for operator display."""
+    inches = mm / 25.4
+    if inches >= 36:
+        return f"~{inches / 12:.1f}ft"
+    return f"~{inches:.1f}in"
+
+
 def run_command(drone: DroneAdapter, cmd: str, args: list[str]) -> bool:
     """Execute a single command. Returns False to exit REPL."""
     match cmd:
@@ -136,7 +144,7 @@ def run_command(drone: DroneAdapter, cmd: str, args: list[str]) -> bool:
                 config = ObstacleConfig.from_env()
                 temp_monitor = ObstacleMonitor(drone, config)
                 zone = temp_monitor.classify_zone(mm)
-                print(f"Forward ToF: {mm}mm ({zone.value.upper()})")
+                print(f"Forward ToF: {mm}mm ({mm_to_imperial(mm)}) ({zone.value.upper()})")
                 if zone.value == "danger":
                     print("DANGER -- drone stopped.")
                     reading = ObstacleReading(
@@ -156,11 +164,16 @@ def run_command(drone: DroneAdapter, cmd: str, args: list[str]) -> bool:
             config = ObstacleConfig.from_env()
             print("Obstacle monitor config:")
             print(
-                f"  Thresholds: CAUTION <{config.caution_mm}mm,"
-                f" WARNING <{config.warning_mm}mm, DANGER <{config.danger_mm}mm"
+                f"  Thresholds: CAUTION <{config.caution_mm}mm"
+                f" ({mm_to_imperial(config.caution_mm)}),"
+                f" WARNING <{config.warning_mm}mm"
+                f" ({mm_to_imperial(config.warning_mm)}),"
+                f" DANGER <{config.danger_mm}mm"
+                f" ({mm_to_imperial(config.danger_mm)})"
             )
-            print(f"  Out of range: {config.out_of_range}mm")
+            print(f"  Out of range: >={config.out_of_range_min}mm")
             print(f"  Poll interval: {config.poll_interval_ms}ms")
+            print(f"  Debounce: {config.required_clear_readings} clear readings to exit DANGER")
             print("  Note: Continuous monitoring runs inside the MCP server.")
             print("  Use 'tof' for a one-shot forward distance reading.")
 

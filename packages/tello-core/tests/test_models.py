@@ -117,9 +117,9 @@ class TestTelemetryFrame:
             yaw=180.0,
             flight_time_s=45,
             timestamp=datetime(2026, 3, 12, 10, 0, 0),
-            forward_tof_mm=8192,
+            forward_tof_mm=8190,
         )
-        assert frame.forward_tof_mm == 8192
+        assert frame.forward_tof_mm == 8190
 
 
 class TestRoomNode:

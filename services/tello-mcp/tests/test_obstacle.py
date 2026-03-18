@@ -21,17 +21,18 @@ from tello_mcp.obstacle import (
 class TestObstacleConfig:
     def test_default_values(self):
         config = ObstacleConfig()
-        assert config.caution_mm == 1500
-        assert config.warning_mm == 800
-        assert config.danger_mm == 400
-        assert config.out_of_range == 8192
+        assert config.caution_mm == 500
+        assert config.warning_mm == 300
+        assert config.danger_mm == 200
+        assert config.out_of_range_min == 8000
+        assert config.required_clear_readings == 3
         assert config.poll_interval_ms == 200
 
     def test_custom_values(self):
         config = ObstacleConfig(danger_mm=500, poll_interval_ms=100)
         assert config.danger_mm == 500
         assert config.poll_interval_ms == 100
-        assert config.caution_mm == 1500  # unchanged default
+        assert config.caution_mm == 500  # unchanged default
 
     def test_from_env(self, monkeypatch):
         monkeypatch.setenv("OBSTACLE_DANGER_MM", "500")
@@ -39,11 +40,11 @@ class TestObstacleConfig:
         config = ObstacleConfig.from_env()
         assert config.danger_mm == 500
         assert config.poll_interval_ms == 100
-        assert config.caution_mm == 1500  # default
+        assert config.caution_mm == 500  # default
 
     def test_from_env_no_vars(self):
         config = ObstacleConfig.from_env()
-        assert config.danger_mm == 400  # default
+        assert config.danger_mm == 200  # default
 
     def test_frozen(self):
         config = ObstacleConfig()
@@ -59,28 +60,31 @@ class TestClassifyZone:
         self.monitor = ObstacleMonitor(MagicMock(), self.config)
 
     def test_out_of_range_is_clear(self):
-        assert self.monitor.classify_zone(8192) == ObstacleZone.CLEAR
+        assert self.monitor.classify_zone(8000) == ObstacleZone.CLEAR
+
+    def test_well_above_out_of_range_is_clear(self):
+        assert self.monitor.classify_zone(8190) == ObstacleZone.CLEAR
 
     def test_above_caution_is_clear(self):
-        assert self.monitor.classify_zone(2000) == ObstacleZone.CLEAR
+        assert self.monitor.classify_zone(600) == ObstacleZone.CLEAR
 
     def test_at_caution_boundary_is_clear(self):
-        assert self.monitor.classify_zone(1500) == ObstacleZone.CLEAR
+        assert self.monitor.classify_zone(500) == ObstacleZone.CLEAR
 
     def test_below_caution_is_caution(self):
-        assert self.monitor.classify_zone(1499) == ObstacleZone.CAUTION
+        assert self.monitor.classify_zone(499) == ObstacleZone.CAUTION
 
     def test_at_warning_boundary_is_caution(self):
-        assert self.monitor.classify_zone(800) == ObstacleZone.CAUTION
+        assert self.monitor.classify_zone(300) == ObstacleZone.CAUTION
 
     def test_below_warning_is_warning(self):
-        assert self.monitor.classify_zone(799) == ObstacleZone.WARNING
+        assert self.monitor.classify_zone(299) == ObstacleZone.WARNING
 
     def test_at_danger_boundary_is_warning(self):
-        assert self.monitor.classify_zone(400) == ObstacleZone.WARNING
+        assert self.monitor.classify_zone(200) == ObstacleZone.WARNING
 
     def test_below_danger_is_danger(self):
-        assert self.monitor.classify_zone(399) == ObstacleZone.DANGER
+        assert self.monitor.classify_zone(199) == ObstacleZone.DANGER
 
     def test_zero_is_danger(self):
         assert self.monitor.classify_zone(0) == ObstacleZone.DANGER
@@ -96,7 +100,7 @@ class TestClassifyZone:
 class TestObstacleMonitorLifecycle:
     async def test_start_is_idempotent(self):
         drone = MagicMock()
-        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 8192}
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 8000}
         monitor = ObstacleMonitor(drone, ObstacleConfig(poll_interval_ms=50))
         await monitor.start()
         task1 = monitor._task
@@ -113,19 +117,19 @@ class TestObstacleMonitorLifecycle:
 class TestObstacleMonitorPolling:
     async def test_poll_caches_latest_reading(self):
         drone = MagicMock()
-        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 1200}
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 400}
         config = ObstacleConfig(poll_interval_ms=50)
         monitor = ObstacleMonitor(drone, config)
         await monitor.start()
         await asyncio.sleep(0.15)  # allow a few polls
         await monitor.stop()
         assert monitor.latest is not None
-        assert monitor.latest.distance_mm == 1200
+        assert monitor.latest.distance_mm == 400
         assert monitor.latest.zone == ObstacleZone.CAUTION
 
     async def test_danger_zone_calls_stop(self):
         drone = MagicMock()
-        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 200}
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 150}
         drone.stop = MagicMock(return_value={"status": "ok"})
         config = ObstacleConfig(poll_interval_ms=50)
         monitor = ObstacleMonitor(drone, config)
@@ -136,7 +140,7 @@ class TestObstacleMonitorPolling:
 
     async def test_clear_zone_does_not_call_stop(self):
         drone = MagicMock()
-        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 8192}
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 8000}
         drone.stop = MagicMock()
         config = ObstacleConfig(poll_interval_ms=50)
         monitor = ObstacleMonitor(drone, config)
@@ -220,6 +224,85 @@ class TestObstacleResponseHandler:
         handler = ObstacleResponseHandler(drone)
         result = await handler.execute(ObstacleResponse.AVOID_AND_CONTINUE)
         assert result["error"] == "NOT_IMPLEMENTED"
+
+
+class TestObstacleMonitorDebounce:
+    """Tests for DANGER exit debouncing in the poll loop."""
+
+    def _make_monitor(self, readings: list[int], poll_ms: int = 50) -> tuple:
+        """Create a monitor with a sequence of mocked readings.
+
+        A sentinel error dict is appended so the poll loop skips cleanly
+        after the reading list is exhausted rather than raising StopIteration
+        inside asyncio.to_thread.
+        """
+        drone = MagicMock()
+        _sentinel = {"error": "EXHAUSTED", "detail": "no more readings"}
+        drone.get_forward_distance.side_effect = [
+            {"status": "ok", "distance_mm": mm} for mm in readings
+        ] + [_sentinel] * 20
+        drone.stop = MagicMock(return_value={"status": "ok"})
+        config = ObstacleConfig(
+            poll_interval_ms=poll_ms,
+            required_clear_readings=3,
+        )
+        monitor = ObstacleMonitor(drone, config)
+        return monitor, drone
+
+    async def test_danger_entry_is_immediate(self):
+        """Single DANGER reading triggers drone.stop() with no delay."""
+        monitor, drone = self._make_monitor([150])
+        await monitor.start()
+        await asyncio.sleep(0.1)
+        await monitor.stop()
+        drone.stop.assert_called()
+        assert monitor.latest.zone == ObstacleZone.DANGER
+
+    async def test_danger_exit_requires_consecutive_clear(self):
+        """3 consecutive non-DANGER readings needed to exit DANGER."""
+        # DANGER, then 2 clear (not enough), then 1 DANGER (reset),
+        # then 3 clear (enough to exit)
+        readings = [150, 600, 600, 150, 600, 600, 600]
+        monitor, drone = self._make_monitor(readings)
+        collected: list[ObstacleReading] = []
+        monitor.on_reading(collected.append)
+        await monitor.start()
+        await asyncio.sleep(0.5)
+        await monitor.stop()
+        zones = [r.zone for r in collected]
+        assert zones[0] == ObstacleZone.DANGER
+        assert zones[1] == ObstacleZone.DANGER
+        assert zones[2] == ObstacleZone.DANGER
+        assert zones[3] == ObstacleZone.DANGER
+        assert zones[4] == ObstacleZone.DANGER
+        assert zones[5] == ObstacleZone.DANGER
+        assert zones[6] == ObstacleZone.CLEAR
+
+    async def test_debounce_does_not_apply_to_non_danger(self):
+        """CAUTION/WARNING/CLEAR transitions are instant, no debounce."""
+        readings = [400, 250, 400]  # CAUTION -> WARNING -> CAUTION
+        monitor, _drone = self._make_monitor(readings)
+        collected: list[ObstacleReading] = []
+        monitor.on_reading(collected.append)
+        await monitor.start()
+        await asyncio.sleep(0.25)
+        await monitor.stop()
+        zones = [r.zone for r in collected]
+        assert zones[0] == ObstacleZone.CAUTION
+        assert zones[1] == ObstacleZone.WARNING
+        assert zones[2] == ObstacleZone.CAUTION
+
+    async def test_single_danger_during_debounce_resets_counter(self):
+        """A DANGER reading mid-debounce resets the clear counter."""
+        readings = [150, 600, 600, 150, 600]
+        monitor, _drone = self._make_monitor(readings)
+        collected: list[ObstacleReading] = []
+        monitor.on_reading(collected.append)
+        await monitor.start()
+        await asyncio.sleep(0.35)
+        await monitor.stop()
+        zones = [r.zone for r in collected]
+        assert all(z == ObstacleZone.DANGER for z in zones)
 
 
 class TestCLIResponseProvider:

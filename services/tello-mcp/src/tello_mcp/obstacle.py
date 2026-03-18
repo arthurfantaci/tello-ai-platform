@@ -31,15 +31,19 @@ logger = structlog.get_logger("tello_mcp.obstacle")
 class ObstacleConfig:
     """Configuration for obstacle detection thresholds.
 
+    Thresholds calibrated for the VL53L0X forward ToF sensor (~500mm reliable range).
+
     Overridable via environment variables:
         OBSTACLE_CAUTION_MM, OBSTACLE_WARNING_MM, OBSTACLE_DANGER_MM,
-        OBSTACLE_OUT_OF_RANGE, OBSTACLE_POLL_INTERVAL_MS
+        OBSTACLE_OUT_OF_RANGE_MIN, OBSTACLE_REQUIRED_CLEAR_READINGS,
+        OBSTACLE_POLL_INTERVAL_MS
     """
 
-    caution_mm: int = 1500
-    warning_mm: int = 800
-    danger_mm: int = 400
-    out_of_range: int = 8192
+    caution_mm: int = 500
+    warning_mm: int = 300
+    danger_mm: int = 200
+    out_of_range_min: int = 8000
+    required_clear_readings: int = 3
     poll_interval_ms: int = 200
 
     @classmethod
@@ -49,7 +53,8 @@ class ObstacleConfig:
             "caution_mm": "OBSTACLE_CAUTION_MM",
             "warning_mm": "OBSTACLE_WARNING_MM",
             "danger_mm": "OBSTACLE_DANGER_MM",
-            "out_of_range": "OBSTACLE_OUT_OF_RANGE",
+            "out_of_range_min": "OBSTACLE_OUT_OF_RANGE_MIN",
+            "required_clear_readings": "OBSTACLE_REQUIRED_CLEAR_READINGS",
             "poll_interval_ms": "OBSTACLE_POLL_INTERVAL_MS",
         }
         kwargs: dict[str, int] = {}
@@ -75,13 +80,15 @@ class ObstacleMonitor:
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._callbacks: list[Callable[[ObstacleReading], None | Awaitable[None]]] = []
+        self._in_danger = False
+        self._danger_clear_count = 0
 
     def classify_zone(self, distance_mm: int) -> ObstacleZone:
         """Classify a distance reading into an obstacle zone.
 
         Pure function — no I/O, no side effects.
         """
-        if distance_mm >= self._config.out_of_range:
+        if distance_mm >= self._config.out_of_range_min:
             return ObstacleZone.CLEAR
         if distance_mm < self._config.danger_mm:
             return ObstacleZone.DANGER
@@ -134,17 +141,35 @@ class ObstacleMonitor:
             result = await asyncio.to_thread(self._drone.get_forward_distance)
             if result.get("status") == "ok":
                 distance_mm = result["distance_mm"]
-                zone = self.classify_zone(distance_mm)
+                raw_zone = self.classify_zone(distance_mm)
+
+                # Debounce DANGER exit
+                if self._in_danger:
+                    if raw_zone != ObstacleZone.DANGER:
+                        self._danger_clear_count += 1
+                        if self._danger_clear_count >= self._config.required_clear_readings:
+                            self._in_danger = False
+                            reported_zone = raw_zone
+                        else:
+                            reported_zone = ObstacleZone.DANGER
+                    else:
+                        self._danger_clear_count = 0
+                        reported_zone = ObstacleZone.DANGER
+                elif raw_zone == ObstacleZone.DANGER:
+                    self._in_danger = True
+                    self._danger_clear_count = 0
+                    logger.warning("obstacle.danger", distance_mm=distance_mm)
+                    await asyncio.to_thread(self._drone.stop)
+                    reported_zone = ObstacleZone.DANGER
+                else:
+                    reported_zone = raw_zone
+
                 reading = ObstacleReading(
                     distance_mm=distance_mm,
-                    zone=zone,
+                    zone=reported_zone,
                     timestamp=datetime.now(UTC),
                 )
                 self._latest = reading
-
-                if zone == ObstacleZone.DANGER:
-                    logger.warning("obstacle.danger", distance_mm=distance_mm)
-                    await asyncio.to_thread(self._drone.stop)
 
                 for cb in self._callbacks:
                     cb_result = cb(reading)

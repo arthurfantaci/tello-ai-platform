@@ -231,13 +231,13 @@ class TestDroneAdapter:
             assert result["distance_mm"] == 1245
 
     def test_get_forward_distance_out_of_range(self, mock_drone):
-        mock_drone.send_read_command.return_value = "tof 8192"
+        mock_drone.send_read_command.return_value = "tof 8190"
         with patch("tello_mcp.drone.Tello", return_value=mock_drone):
             adapter = DroneAdapter()
             adapter.connect()
             result = adapter.get_forward_distance()
             assert result["status"] == "ok"
-            assert result["distance_mm"] == 8192
+            assert result["distance_mm"] == 8190
 
     def test_get_forward_distance_parse_error(self, mock_drone):
         mock_drone.send_read_command.return_value = "error"

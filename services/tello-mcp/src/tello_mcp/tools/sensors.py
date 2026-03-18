@@ -48,7 +48,7 @@ def register(mcp: FastMCP) -> None:
     async def get_forward_distance(ctx: Context) -> dict:
         """Get forward-facing ToF distance in mm (Dot-Matrix Module sensor).
 
-        Returns distance to nearest obstacle ahead. 8192 means nothing detected.
+        Returns distance to nearest obstacle ahead. >=8000 means out of range.
         Includes obstacle zone classification (CLEAR/CAUTION/WARNING/DANGER).
         """
         monitor = ctx.lifespan_context["monitor"]
@@ -64,7 +64,7 @@ def register(mcp: FastMCP) -> None:
     async def get_obstacle_status(ctx: Context) -> dict:
         """Check if the path ahead is clear. Returns zone and distance.
 
-        Zones: CLEAR (safe), CAUTION (<150cm), WARNING (<80cm), DANGER (<40cm).
+        Zones: CLEAR (safe), CAUTION (<500mm/~20in), WARNING (<300mm/~12in), DANGER (<200mm/~8in).
         In DANGER zone, the drone has already been stopped automatically.
         """
         monitor = ctx.lifespan_context["monitor"]

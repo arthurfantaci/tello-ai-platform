@@ -262,7 +262,7 @@ class DroneAdapter:
     def get_forward_distance(self) -> dict:
         """Query the forward-facing ToF sensor on the Dot-Matrix Module.
 
-        Returns distance in mm, or 8192 if out of range.
+        Returns distance in mm. Readings >=8000 indicate out of range.
         Uses EXT tof? command via the Open-Source Controller (ESP32).
         """
         if err := self._require_connection():

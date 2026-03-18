@@ -1,0 +1,309 @@
+{
+  "date": "2026-03-17T15:20:57.096541+00:00",
+  "drone_host": "auto",
+  "battery_start": 89,
+  "battery_end": 88,
+  "obstacle_config": {
+    "caution_mm": 1500,
+    "warning_mm": 800,
+    "danger_mm": 400,
+    "out_of_range": 8192,
+    "poll_interval_ms": 200
+  },
+  "tests": [
+    {
+      "name": "sensor_alive",
+      "status": "pass",
+      "reading": {
+        "distance_mm": 8190,
+        "zone": "clear"
+      },
+      "notes": ""
+    },
+    {
+      "name": "range_sweep",
+      "status": "pass",
+      "readings": [
+        {
+          "timestamp": "2026-03-17T15:19:49.022998+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:49.635295+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:50.247301+00:00",
+          "distance_mm": 506,
+          "zone": "warning"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:50.853510+00:00",
+          "distance_mm": 487,
+          "zone": "warning"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:51.463331+00:00",
+          "distance_mm": 445,
+          "zone": "warning"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:52.072463+00:00",
+          "distance_mm": 468,
+          "zone": "warning"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:52.686714+00:00",
+          "distance_mm": 471,
+          "zone": "warning"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:53.297571+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:53.905733+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:54.518438+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:55.123334+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:55.734619+00:00",
+          "distance_mm": 453,
+          "zone": "warning"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:56.342576+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:56.952857+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:57.561742+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:58.172355+00:00",
+          "distance_mm": 406,
+          "zone": "warning"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:58.782359+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:59.392105+00:00",
+          "distance_mm": 8190,
+          "zone": "clear"
+        },
+        {
+          "timestamp": "2026-03-17T15:19:59.999447+00:00",
+          "distance_mm": 305,
+          "zone": "danger"
+        },
+        {
+          "timestamp": "2026-03-17T15:20:00.611366+00:00",
+          "distance_mm": 196,
+          "zone": "danger"
+        }
+      ],
+      "stats": {
+        "min": 196,
+        "max": 8190,
+        "distinct_values": 10
+      },
+      "notes": ""
+    },
+    {
+      "name": "close_object",
+      "status": "pass",
+      "reading": {
+        "distance_mm": 300,
+        "zone": "danger"
+      },
+      "notes": ""
+    },
+    {
+      "name": "stability",
+      "status": "pass",
+      "readings": [
+        {
+          "timestamp": "2026-03-17T15:20:25.257324+00:00",
+          "distance_mm": 503
+        },
+        {
+          "timestamp": "2026-03-17T15:20:25.569408+00:00",
+          "distance_mm": 508
+        },
+        {
+          "timestamp": "2026-03-17T15:20:25.879162+00:00",
+          "distance_mm": 510
+        },
+        {
+          "timestamp": "2026-03-17T15:20:26.187645+00:00",
+          "distance_mm": 500
+        },
+        {
+          "timestamp": "2026-03-17T15:20:26.499124+00:00",
+          "distance_mm": 498
+        },
+        {
+          "timestamp": "2026-03-17T15:20:26.806550+00:00",
+          "distance_mm": 506
+        },
+        {
+          "timestamp": "2026-03-17T15:20:27.114053+00:00",
+          "distance_mm": 509
+        },
+        {
+          "timestamp": "2026-03-17T15:20:27.422421+00:00",
+          "distance_mm": 499
+        },
+        {
+          "timestamp": "2026-03-17T15:20:27.730258+00:00",
+          "distance_mm": 502
+        },
+        {
+          "timestamp": "2026-03-17T15:20:28.041754+00:00",
+          "distance_mm": 513
+        },
+        {
+          "timestamp": "2026-03-17T15:20:28.348116+00:00",
+          "distance_mm": 509
+        },
+        {
+          "timestamp": "2026-03-17T15:20:28.654601+00:00",
+          "distance_mm": 508
+        },
+        {
+          "timestamp": "2026-03-17T15:20:28.964018+00:00",
+          "distance_mm": 515
+        },
+        {
+          "timestamp": "2026-03-17T15:20:29.270750+00:00",
+          "distance_mm": 509
+        },
+        {
+          "timestamp": "2026-03-17T15:20:29.577984+00:00",
+          "distance_mm": 512
+        },
+        {
+          "timestamp": "2026-03-17T15:20:29.888919+00:00",
+          "distance_mm": 498
+        },
+        {
+          "timestamp": "2026-03-17T15:20:30.197234+00:00",
+          "distance_mm": 506
+        },
+        {
+          "timestamp": "2026-03-17T15:20:30.506815+00:00",
+          "distance_mm": 509
+        },
+        {
+          "timestamp": "2026-03-17T15:20:30.815925+00:00",
+          "distance_mm": 502
+        },
+        {
+          "timestamp": "2026-03-17T15:20:31.126368+00:00",
+          "distance_mm": 505
+        },
+        {
+          "timestamp": "2026-03-17T15:20:31.434678+00:00",
+          "distance_mm": 502
+        },
+        {
+          "timestamp": "2026-03-17T15:20:31.741476+00:00",
+          "distance_mm": 509
+        },
+        {
+          "timestamp": "2026-03-17T15:20:32.049787+00:00",
+          "distance_mm": 506
+        },
+        {
+          "timestamp": "2026-03-17T15:20:32.355441+00:00",
+          "distance_mm": 495
+        },
+        {
+          "timestamp": "2026-03-17T15:20:32.662909+00:00",
+          "distance_mm": 507
+        },
+        {
+          "timestamp": "2026-03-17T15:20:32.968101+00:00",
+          "distance_mm": 499
+        },
+        {
+          "timestamp": "2026-03-17T15:20:33.276920+00:00",
+          "distance_mm": 516
+        },
+        {
+          "timestamp": "2026-03-17T15:20:33.584023+00:00",
+          "distance_mm": 502
+        },
+        {
+          "timestamp": "2026-03-17T15:20:33.888316+00:00",
+          "distance_mm": 509
+        },
+        {
+          "timestamp": "2026-03-17T15:20:34.199945+00:00",
+          "distance_mm": 511
+        }
+      ],
+      "stats": {
+        "mean": 505.9,
+        "std": 5.3,
+        "min": 495,
+        "max": 516
+      },
+      "notes": ""
+    },
+    {
+      "name": "telemetry_integration",
+      "status": "pass",
+      "telemetry_snapshot": {
+        "battery_pct": 88,
+        "height_cm": 0,
+        "tof_cm": 10,
+        "temp_c": 66.0,
+        "pitch": 0.0,
+        "roll": 0.0,
+        "yaw": -16.0,
+        "flight_time_s": 0,
+        "timestamp": "2026-03-17T15:20:34.514827+00:00",
+        "forward_tof_mm": 517
+      },
+      "notes": ""
+    },
+    {
+      "name": "flight_danger_stop",
+      "status": "fail",
+      "notes": "Takeoff failed: {'error': 'COMMAND_FAILED', 'detail': \"Command 'takeoff' was unsuccessful for 4 tries. Latest response:\\t'error'\"}"
+    }
+  ],
+  "sensor_characterization": {
+    "effective_range_mm": {
+      "min": 196,
+      "max": 8190
+    },
+    "noise_std_mm": 5.3,
+    "noise_mean_mm": 505.9,
+    "response_latency_note": "estimated from sampling interval"
+  }
+}
