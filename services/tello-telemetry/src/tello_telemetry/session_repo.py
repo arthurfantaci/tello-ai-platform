@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from neo4j import Driver
 
-    from tello_core.models import Anomaly, FlightSession, TelemetrySample
+    from tello_core.models import Anomaly, FlightSession, ObstacleIncident, TelemetrySample
 
 logger = structlog.get_logger("tello_telemetry.session_repo")
 
@@ -155,6 +155,50 @@ class SessionRepository:
                 detail=anomaly.detail,
                 timestamp=anomaly.timestamp.isoformat(),
             )
+
+    def add_obstacle_incident(self, session_id: str, incident: ObstacleIncident) -> None:
+        """Create an ObstacleIncident node linked to a session.
+
+        Args:
+            session_id: Parent flight session.
+            incident: Obstacle incident to persist.
+        """
+        with self._driver.session() as s:
+            s.run(
+                """
+                MATCH (fs:FlightSession {id: $session_id})
+                CREATE (oi:ObstacleIncident {
+                    id: $id,
+                    timestamp: datetime($timestamp),
+                    forward_distance_mm: $forward_distance_mm,
+                    forward_distance_in: $forward_distance_in,
+                    height_cm: $height_cm,
+                    zone: $zone,
+                    response: $response,
+                    outcome: $outcome,
+                    mission_id: $mission_id,
+                    room_id: $room_id,
+                    reversed_direction: $reversed_direction
+                })-[:TRIGGERED_DURING]->(fs)
+                """,
+                session_id=session_id,
+                id=incident.id,
+                timestamp=incident.timestamp.isoformat(),
+                forward_distance_mm=incident.forward_distance_mm,
+                forward_distance_in=incident.forward_distance_in,
+                height_cm=incident.height_cm,
+                zone=incident.zone,
+                response=incident.response,
+                outcome=incident.outcome,
+                mission_id=incident.mission_id,
+                room_id=incident.room_id,
+                reversed_direction=incident.reversed_direction,
+            )
+        logger.info(
+            "Obstacle incident persisted",
+            session_id=session_id,
+            incident_id=incident.id,
+        )
 
     # -- Reads ---------------------------------------------------
 

@@ -148,6 +148,8 @@ class StreamConsumer:
             await self._handle_land()
         elif event_type == "telemetry":
             await self._handle_telemetry(fields)
+        elif event_type == "obstacle_danger":
+            await self._handle_obstacle(fields)
         else:
             logger.warning("Unknown event type: %s", event_type)
 
@@ -228,3 +230,36 @@ class StreamConsumer:
                 sample,
             )
             self._last_sample_time = now
+
+    async def _handle_obstacle(self, fields: dict) -> None:
+        """Record an obstacle incident for the current session."""
+        if self._current_session is None:
+            logger.warning("Obstacle event without active session")
+            return
+
+        from tello_core.models import ObstacleIncident
+
+        incident = ObstacleIncident(
+            id=str(uuid4()),
+            timestamp=datetime.now(UTC),
+            forward_distance_mm=int(fields.get("forward_distance_mm", 0)),
+            forward_distance_in=float(fields.get("forward_distance_in", 0.0)),
+            height_cm=int(fields.get("height_cm", 0)),
+            zone=fields.get("zone", "DANGER"),
+            response=fields.get("response", "unknown"),
+            outcome=fields.get("outcome", "unknown"),
+            mission_id=fields.get("mission_id") or None,
+            room_id=fields.get("room_id") or None,
+            reversed_direction=fields.get("reversed_direction") or None,
+        )
+        await asyncio.to_thread(
+            self._repo.add_obstacle_incident,
+            self._current_session.id,
+            incident,
+        )
+        logger.info(
+            "Obstacle incident recorded",
+            session_id=self._current_session.id,
+            distance_mm=incident.forward_distance_mm,
+            response=incident.response,
+        )
