@@ -133,7 +133,11 @@ def main() -> None:
     transport = parsed.transport
     port = parsed.port
 
-    mcp.run(transport=transport, host="0.0.0.0", port=port)
+    kwargs: dict = {"transport": transport}
+    if transport != "stdio":
+        kwargs["host"] = "0.0.0.0"
+        kwargs["port"] = port
+    mcp.run(**kwargs)
 
 
 if __name__ == "__main__":
