@@ -1,0 +1,225 @@
+{
+  "date": "2026-03-19T20:31:40.960975+00:00",
+  "phase": "4b",
+  "test_name": "obstacle_avoidance",
+  "drone_host": "auto",
+  "battery_start": 90,
+  "battery_end": 76,
+  "obstacle_config": {
+    "caution_mm": 500,
+    "warning_mm": 300,
+    "danger_mm": 200,
+    "out_of_range_min": 8000,
+    "required_clear_readings": 3,
+    "poll_interval_ms": 200
+  },
+  "tests": [
+    {
+      "name": "lock_verification",
+      "status": "pass",
+      "crossed_responses": 0,
+      "move_results": [
+        {
+          "iteration": 1,
+          "direction": "forward",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'forward 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 1,
+          "direction": "back",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'back 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 2,
+          "direction": "forward",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'forward 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 2,
+          "direction": "back",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'back 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 3,
+          "direction": "forward",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'forward 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 3,
+          "direction": "back",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'back 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 4,
+          "direction": "forward",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'forward 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 4,
+          "direction": "back",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'back 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 5,
+          "direction": "forward",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'forward 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 5,
+          "direction": "back",
+          "result": {
+            "error": "COMMAND_FAILED",
+            "detail": "Command 'back 30' was unsuccessful for 4 tries. Latest response:\t'error No valid imu'"
+          },
+          "ok": true,
+          "crossed": false
+        }
+      ],
+      "sensor_results": [
+        {
+          "iteration": 1,
+          "result": {
+            "status": "ok",
+            "distance_mm": 988
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 2,
+          "result": {
+            "status": "ok",
+            "distance_mm": 989
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 3,
+          "result": {
+            "status": "ok",
+            "distance_mm": 991
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 4,
+          "result": {
+            "status": "ok",
+            "distance_mm": 992
+          },
+          "ok": true,
+          "crossed": false
+        },
+        {
+          "iteration": 5,
+          "result": {
+            "status": "ok",
+            "distance_mm": 988
+          },
+          "ok": true,
+          "crossed": false
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "name": "rth_trigger",
+      "status": "pass",
+      "pre_flight_distance_mm": 990,
+      "total_moved_cm": 80,
+      "sensor_contacted": true,
+      "rth_triggered": true,
+      "reversed_observed": true,
+      "landed_observed": true,
+      "distance_checks": [
+        {
+          "phase": "pre_flight",
+          "timestamp": "2026-03-19T20:30:46.467956+00:00",
+          "distance_mm": 990,
+          "zone": "clear"
+        },
+        {
+          "phase": "after_20cm",
+          "timestamp": "2026-03-19T20:30:54.416145+00:00",
+          "distance_mm": 854,
+          "zone": "clear"
+        },
+        {
+          "phase": "after_40cm",
+          "timestamp": "2026-03-19T20:30:56.562838+00:00",
+          "distance_mm": 673,
+          "zone": "clear"
+        },
+        {
+          "phase": "after_60cm",
+          "timestamp": "2026-03-19T20:30:59.026545+00:00",
+          "distance_mm": 422,
+          "zone": "caution"
+        },
+        {
+          "phase": "after_80cm",
+          "timestamp": "2026-03-19T20:31:01.387461+00:00",
+          "distance_mm": 192,
+          "zone": "danger"
+        }
+      ],
+      "takeoff_result": {
+        "status": "ok"
+      },
+      "battery_pct": 89,
+      "notes": ""
+    },
+    {
+      "name": "pipeline_verification",
+      "status": "skipped",
+      "notes": "NEO4J_PASSWORD not set"
+    }
+  ]
+}
