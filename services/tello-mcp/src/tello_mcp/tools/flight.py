@@ -33,7 +33,10 @@ def register(mcp: FastMCP) -> None:
         """Land the drone safely."""
         drone = ctx.lifespan_context["drone"]
         queue = ctx.lifespan_context["queue"]
-        return await queue.enqueue(drone.safe_land)
+        telemetry = ctx.lifespan_context["telemetry"]
+        result = await queue.enqueue(drone.safe_land)
+        await telemetry.publish_event("land", {})
+        return result
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
     async def emergency_stop(ctx: Context) -> dict:
@@ -52,7 +55,12 @@ def register(mcp: FastMCP) -> None:
         """
         drone = ctx.lifespan_context["drone"]
         queue = ctx.lifespan_context["queue"]
-        return await queue.enqueue(lambda: drone.move(direction, distance_cm))
+        last_command = ctx.lifespan_context["last_command"]
+        result = await queue.enqueue(lambda: drone.move(direction, distance_cm))
+        if result.get("status") == "ok":
+            last_command["direction"] = direction
+            last_command["distance_cm"] = distance_cm
+        return result
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
     async def rotate(ctx: Context, degrees: int) -> dict:
@@ -78,4 +86,9 @@ def register(mcp: FastMCP) -> None:
         """
         drone = ctx.lifespan_context["drone"]
         queue = ctx.lifespan_context["queue"]
-        return await queue.enqueue(lambda: drone.go_xyz_speed_mid(x, y, z, speed, mid))
+        last_command = ctx.lifespan_context["last_command"]
+        result = await queue.enqueue(lambda: drone.go_xyz_speed_mid(x, y, z, speed, mid))
+        if result.get("status") == "ok":
+            last_command["direction"] = ""
+            last_command["distance_cm"] = 0
+        return result

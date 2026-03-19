@@ -83,11 +83,11 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8200)
     parsed = parser.parse_args()
 
-    mcp.run(
-        transport=parsed.transport,
-        host="0.0.0.0",
-        port=parsed.port,
-    )
+    kwargs: dict = {"transport": parsed.transport}
+    if parsed.transport != "stdio":
+        kwargs["host"] = "0.0.0.0"
+        kwargs["port"] = parsed.port
+    mcp.run(**kwargs)
 
 
 if __name__ == "__main__":

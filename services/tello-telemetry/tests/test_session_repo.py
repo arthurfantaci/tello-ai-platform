@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tello_core.models import Anomaly, FlightSession, TelemetrySample
+from tello_core.models import Anomaly, FlightSession, ObstacleIncident, TelemetrySample
 from tello_telemetry.session_repo import SessionRepository
 
 
@@ -163,6 +163,25 @@ class TestGetSessionAnomalies:
         result = repo.get_session_anomalies("sess-1")
         assert len(result) == 1
         assert result[0]["type"] == "battery_low"
+
+
+class TestAddObstacleIncident:
+    def test_creates_incident_node_with_relationship(self, repo, mock_session):
+        incident = ObstacleIncident(
+            id="inc-1",
+            timestamp=datetime(2026, 3, 18, tzinfo=UTC),
+            forward_distance_mm=185,
+            forward_distance_in=7.3,
+            height_cm=80,
+            zone="DANGER",
+            response="RETURN_TO_HOME",
+            outcome="landed",
+        )
+        repo.add_obstacle_incident("session-1", incident)
+        mock_session.run.assert_called_once()
+        cypher = mock_session.run.call_args[0][0]
+        assert "ObstacleIncident" in cypher
+        assert "TRIGGERED_DURING" in cypher
 
 
 class TestGetAnomalySummary:

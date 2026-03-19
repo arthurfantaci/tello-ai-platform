@@ -231,6 +231,52 @@ class TestRunLoop:
         )
 
 
+class TestObstacleEventRouting:
+    async def test_obstacle_danger_creates_incident(self):
+        config = _make_config()
+        redis = AsyncMock()
+        detector = AnomalyDetector(config)
+        session_repo = MagicMock()
+        session_repo.add_obstacle_incident = MagicMock()
+
+        consumer = StreamConsumer(redis, config, detector, session_repo)
+        # Simulate active session
+        consumer._current_session = MagicMock()
+        consumer._current_session.id = "session-1"
+
+        fields = {
+            "event_type": "obstacle_danger",
+            "forward_distance_mm": "185",
+            "forward_distance_in": "7.3",
+            "height_cm": "80",
+            "zone": "DANGER",
+            "response": "RETURN_TO_HOME",
+            "outcome": "returned",
+            "mission_id": "m1",
+            "room_id": "living-room",
+            "reversed_direction": "back",
+        }
+        await consumer._process_message("msg-1", fields)
+        session_repo.add_obstacle_incident.assert_called_once()
+
+    async def test_obstacle_danger_without_session_ignored(self):
+        config = _make_config()
+        redis = AsyncMock()
+        detector = AnomalyDetector(config)
+        session_repo = MagicMock()
+        session_repo.add_obstacle_incident = MagicMock()
+
+        consumer = StreamConsumer(redis, config, detector, session_repo)
+        # No active session
+
+        fields = {
+            "event_type": "obstacle_danger",
+            "forward_distance_mm": "185",
+        }
+        await consumer._process_message("msg-1", fields)
+        session_repo.add_obstacle_incident.assert_not_called()
+
+
 class TestMalformedMessage:
     async def test_invalid_json_skipped_and_acked(
         self,

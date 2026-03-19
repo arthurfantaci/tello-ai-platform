@@ -175,3 +175,19 @@ class Anomaly(BaseModel):
     severity: Literal["warning", "critical"]
     detail: str
     timestamp: datetime
+
+
+class ObstacleIncident(BaseModel):
+    """A recorded obstacle detection incident during flight."""
+
+    id: str
+    timestamp: datetime
+    forward_distance_mm: int
+    forward_distance_in: float
+    height_cm: int
+    zone: str
+    response: str
+    outcome: str
+    mission_id: str | None = None
+    room_id: str | None = None
+    reversed_direction: str | None = None
