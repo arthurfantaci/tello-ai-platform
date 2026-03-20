@@ -52,5 +52,8 @@ class TelemetryPublisher:
             data: Event payload.
         """
         fields = {"event_type": event_type, **{k: str(v) for k, v in data.items()}}
-        await self._redis.xadd(self._stream, fields)
-        logger.info("Published event %s", event_type)
+        try:
+            await self._redis.xadd(self._stream, fields)
+            logger.info("event.published", event_type=event_type)
+        except Exception:
+            logger.exception("event.publish_failed", event_type=event_type)

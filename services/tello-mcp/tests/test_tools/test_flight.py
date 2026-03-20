@@ -87,3 +87,33 @@ class TestFlightTools:
         call_args = mock_telemetry.publish_event.call_args
         assert call_args[0][0] == "takeoff"
         assert call_args[0][1]["room_id"] == "living_room"
+
+    async def test_takeoff_does_not_publish_on_failure(self):
+        """Takeoff event is NOT published when SDK command fails."""
+        mock_queue = AsyncMock()
+        mock_queue.enqueue = AsyncMock(
+            return_value={"error": "COMMAND_FAILED", "detail": "timeout"}
+        )
+        mock_telemetry = AsyncMock()
+        ctx = self._make_ctx(queue=mock_queue, telemetry=mock_telemetry)
+        await self.registered_tools["takeoff"](ctx, room_id="living-room")
+        mock_telemetry.publish_event.assert_not_called()
+
+    async def test_land_does_not_publish_on_failure(self):
+        """Land event is NOT published when SDK command fails."""
+        mock_queue = AsyncMock()
+        mock_queue.enqueue = AsyncMock(return_value={"error": "LAND_FAILED", "detail": "timeout"})
+        mock_telemetry = AsyncMock()
+        ctx = self._make_ctx(queue=mock_queue, telemetry=mock_telemetry)
+        await self.registered_tools["land"](ctx)
+        mock_telemetry.publish_event.assert_not_called()
+
+    async def test_land_publishes_on_success(self):
+        """Land event IS published when SDK command succeeds."""
+        mock_queue = AsyncMock()
+        mock_queue.enqueue = AsyncMock(return_value={"status": "ok"})
+        mock_telemetry = AsyncMock()
+        ctx = self._make_ctx(queue=mock_queue, telemetry=mock_telemetry)
+        await self.registered_tools["land"](ctx)
+        mock_telemetry.publish_event.assert_called_once()
+        assert mock_telemetry.publish_event.call_args[0][0] == "land"

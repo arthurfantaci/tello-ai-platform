@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import structlog
 from fastmcp import Context
 from mcp.types import ToolAnnotations
+
+logger = structlog.get_logger("tello_mcp.tools.flight")
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -25,7 +28,14 @@ def register(mcp: FastMCP) -> None:
         queue = ctx.lifespan_context["queue"]
         telemetry = ctx.lifespan_context["telemetry"]
         result = await queue.enqueue(drone.takeoff, heavy=True)
-        await telemetry.publish_event("takeoff", {"room_id": room_id})
+        if result.get("status") == "ok":
+            await telemetry.publish_event("takeoff", {"room_id": room_id})
+        else:
+            logger.warning(
+                "event.skipped_command_failed",
+                event_type="takeoff",
+                error=result.get("error"),
+            )
         return result
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -35,7 +45,14 @@ def register(mcp: FastMCP) -> None:
         queue = ctx.lifespan_context["queue"]
         telemetry = ctx.lifespan_context["telemetry"]
         result = await queue.enqueue(drone.safe_land)
-        await telemetry.publish_event("land", {})
+        if result.get("status") == "ok":
+            await telemetry.publish_event("land", {})
+        else:
+            logger.warning(
+                "event.skipped_command_failed",
+                event_type="land",
+                error=result.get("error"),
+            )
         return result
 
     @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))

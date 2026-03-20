@@ -190,6 +190,46 @@ class TestObstacleMonitorPolling:
         assert len(readings) > 0
         assert readings[0].distance_mm == 600
 
+    async def test_callback_exception_does_not_kill_monitor(self):
+        """Poll loop survives a callback that raises an exception."""
+        drone = MagicMock()
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 600}
+        config = ObstacleConfig(poll_interval_ms=50)
+        monitor = ObstacleMonitor(drone, config)
+
+        call_count = 0
+
+        def exploding_callback(reading):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                msg = "boom"
+                raise RuntimeError(msg)
+
+        monitor.on_reading(exploding_callback)
+        await monitor.start()
+        await asyncio.sleep(0.2)
+        await monitor.stop()
+        assert call_count >= 2
+
+    async def test_callback_exception_is_logged(self, capsys):
+        """Callback exception is logged for diagnosis."""
+        drone = MagicMock()
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 600}
+        config = ObstacleConfig(poll_interval_ms=50)
+        monitor = ObstacleMonitor(drone, config)
+
+        def exploding_callback(reading):
+            msg = "boom"
+            raise RuntimeError(msg)
+
+        monitor.on_reading(exploding_callback)
+        await monitor.start()
+        await asyncio.sleep(0.15)
+        await monitor.stop()
+        captured = capsys.readouterr()
+        assert "callback_failed" in captured.out or "boom" in captured.out
+
 
 class TestObstacleResponse:
     def test_response_values(self):
@@ -393,6 +433,109 @@ class TestObstacleMonitorDebounce:
         assert all(z == ObstacleZone.DANGER for z in zones)
 
 
+class TestRTHGuards:
+    """Tests for on_obstacle_reading guards that prevent re-entry and grounded RTH."""
+
+    def _make_handler(self):
+        drone = MagicMock()
+        drone.safe_land.return_value = {"status": "ok"}
+        strategy = MagicMock()
+        strategy.return_to_home.return_value = {
+            "status": "returned",
+            "method": "simple_reverse",
+            "reversed_direction": "back",
+            "height_cm": 80,
+            "forward_distance_mm": 185,
+            "landed": True,
+        }
+        telemetry = AsyncMock()
+        telemetry.publish_event = AsyncMock()
+        handler = ObstacleResponseHandler(
+            drone=drone,
+            rth_strategy=strategy,
+            telemetry=telemetry,
+            last_command={"direction": "forward", "distance_cm": 50},
+        )
+        return handler, drone, strategy, telemetry
+
+    async def test_rth_skipped_when_active(self):
+        """on_obstacle_reading returns immediately if RTH is already in progress."""
+        handler, _drone, strategy, _tel = self._make_handler()
+        handler._rth_active = True
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        await handler.on_obstacle_reading(reading)
+        strategy.return_to_home.assert_not_called()
+
+    async def test_rth_skipped_when_grounded(self):
+        """on_obstacle_reading returns immediately if drone is on the ground."""
+        handler, drone, strategy, _tel = self._make_handler()
+        drone.get_height.return_value = {"status": "ok", "height_cm": 0}
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        await handler.on_obstacle_reading(reading)
+        strategy.return_to_home.assert_not_called()
+
+    async def test_rth_not_skipped_when_height_query_fails(self):
+        """A failed get_height must NOT suppress RTH — drone may be airborne."""
+        handler, drone, strategy, _tel = self._make_handler()
+        drone.get_height.return_value = {"error": "HEIGHT_FAILED", "detail": "timeout"}
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        await handler.on_obstacle_reading(reading)
+        strategy.return_to_home.assert_called_once()
+
+    async def test_rth_active_flag_set_during_execution(self):
+        """_rth_active is True while execute() is running, False after."""
+        handler, drone, strategy, _tel = self._make_handler()
+        drone.get_height.return_value = {"status": "ok", "height_cm": 80}
+
+        observed_during: list[bool] = []
+        original_execute = handler.execute
+
+        async def spy_execute(*args, **kwargs):
+            observed_during.append(handler._rth_active)
+            return await original_execute(*args, **kwargs)
+
+        handler.execute = spy_execute
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        await handler.on_obstacle_reading(reading)
+        assert observed_during == [True]
+        assert handler._rth_active is False
+
+    async def test_rth_active_flag_cleared_on_exception(self):
+        """_rth_active is cleared even if execute() raises."""
+        handler, drone, _strategy, _tel = self._make_handler()
+        drone.get_height.return_value = {"status": "ok", "height_cm": 80}
+        handler.execute = AsyncMock(side_effect=RuntimeError("execute failed"))
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        with pytest.raises(RuntimeError, match="execute failed"):
+            await handler.on_obstacle_reading(reading)
+        assert handler._rth_active is False
+
+
 class TestCLIResponseProvider:
     async def test_present_options_emergency_land(self, monkeypatch):
         provider = CLIResponseProvider()
@@ -427,3 +570,52 @@ class TestCLIResponseProvider:
         monkeypatch.setattr("builtins.input", lambda _: next(inputs))
         choice = await provider.present_options(reading)
         assert choice == ObstacleResponse.RETURN_TO_HOME
+
+
+class TestObstacleMonitorStatus:
+    def test_status_initial_state(self):
+        monitor = ObstacleMonitor(MagicMock())
+        status = monitor.status()
+        assert status == {
+            "running": False,
+            "in_danger": False,
+            "danger_clear_count": 0,
+            "latest_reading_mm": None,
+            "latest_zone": None,
+        }
+
+    async def test_status_after_start(self):
+        drone = MagicMock()
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 600}
+        config = ObstacleConfig(poll_interval_ms=50)
+        monitor = ObstacleMonitor(drone, config)
+        await monitor.start()
+        await asyncio.sleep(0.1)
+        status = monitor.status()
+        assert status["running"] is True
+        assert status["latest_reading_mm"] == 600
+        assert status["latest_zone"] == "clear"
+        await monitor.stop()
+
+    async def test_start_resets_stale_state(self):
+        """Starting the monitor resets _in_danger and _danger_clear_count."""
+        drone = MagicMock()
+        drone.get_forward_distance.return_value = {"error": "EXHAUSTED"}
+        monitor = ObstacleMonitor(drone, ObstacleConfig(poll_interval_ms=50))
+        monitor._in_danger = True
+        monitor._danger_clear_count = 2
+        await monitor.start()
+        assert monitor._in_danger is False
+        assert monitor._danger_clear_count == 0
+        await monitor.stop()
+
+
+class TestObstacleResponseHandlerStatus:
+    def test_status_initial(self):
+        handler = ObstacleResponseHandler(MagicMock())
+        assert handler.status() == {"rth_active": False}
+
+    def test_status_rth_active(self):
+        handler = ObstacleResponseHandler(MagicMock())
+        handler._rth_active = True
+        assert handler.status() == {"rth_active": True}

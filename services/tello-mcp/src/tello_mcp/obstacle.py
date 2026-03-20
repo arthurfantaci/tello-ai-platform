@@ -115,6 +115,16 @@ class ObstacleMonitor:
         """Whether the monitor is actively polling."""
         return self._running
 
+    def status(self) -> dict:
+        """Current monitor state for diagnostics."""
+        return {
+            "running": self._running,
+            "in_danger": self._in_danger,
+            "danger_clear_count": self._danger_clear_count,
+            "latest_reading_mm": self._latest.distance_mm if self._latest else None,
+            "latest_zone": self._latest.zone.value if self._latest else None,
+        }
+
     def on_reading(self, callback: Callable[[ObstacleReading], None | Awaitable[None]]) -> None:
         """Subscribe to obstacle readings."""
         self._callbacks.append(callback)
@@ -123,6 +133,8 @@ class ObstacleMonitor:
         """Start the background polling loop. Idempotent."""
         if self._running:
             return
+        self._in_danger = False
+        self._danger_clear_count = 0
         self._running = True
         self._task = asyncio.create_task(self._poll_loop())
         logger.info("obstacle_monitor.started", poll_interval_ms=self._config.poll_interval_ms)
@@ -174,9 +186,16 @@ class ObstacleMonitor:
                 self._latest = reading
 
                 for cb in self._callbacks:
-                    cb_result = cb(reading)
-                    if asyncio.iscoroutine(cb_result):
-                        await cb_result
+                    try:
+                        cb_result = cb(reading)
+                        if asyncio.iscoroutine(cb_result):
+                            await cb_result
+                    except Exception:
+                        logger.exception(
+                            "obstacle.callback_failed",
+                            distance_mm=reading.distance_mm,
+                            zone=reading.zone.value,
+                        )
 
             await asyncio.sleep(self._config.poll_interval_ms / 1000)
 
@@ -208,6 +227,11 @@ class ObstacleResponseHandler:
         self._rth = rth_strategy
         self._telemetry = telemetry
         self._last_command = last_command
+        self._rth_active = False
+
+    def status(self) -> dict:
+        """Current handler state for diagnostics."""
+        return {"rth_active": self._rth_active}
 
     async def execute(
         self,
@@ -256,25 +280,55 @@ class ObstacleResponseHandler:
     async def on_obstacle_reading(self, reading: ObstacleReading) -> None:
         """Callback for ObstacleMonitor — auto-triggers RTH on DANGER.
 
-        Registered via monitor.on_reading(handler.on_obstacle_reading).
-        Builds ObstacleContext from lifespan state and dispatches to execute().
+        Guards:
+        - Ignores non-DANGER readings
+        - Skips if RTH is already in progress (_rth_active flag)
+        - Skips if drone is confirmed on the ground (height_cm == 0)
+        - Does NOT skip if get_height fails (drone may be airborne)
         """
         if reading.zone != ObstacleZone.DANGER:
+            return
+
+        if self._rth_active:
+            logger.debug("obstacle.rth_skipped_active", distance_mm=reading.distance_mm)
             return
 
         last_cmd = self._last_command or {}
         height_result = await asyncio.to_thread(self._drone.get_height)
         height_cm = height_result.get("height_cm", 0) if height_result.get("status") == "ok" else 0
 
-        context = ObstacleContext(
-            last_direction=last_cmd.get("direction", ""),
-            last_distance_cm=int(last_cmd.get("distance_cm", 0)),
-            height_cm=height_cm,
-            forward_distance_mm=reading.distance_mm,
-            mission_id=last_cmd.get("mission_id"),
-            room_id=last_cmd.get("room_id"),
-        )
-        await self.execute(ObstacleResponse.RETURN_TO_HOME, context)
+        if height_result.get("status") == "ok" and height_cm == 0:
+            logger.debug(
+                "obstacle.rth_skipped_grounded",
+                height_cm=height_cm,
+                distance_mm=reading.distance_mm,
+            )
+            return
+
+        self._rth_active = True
+        try:
+            logger.info(
+                "obstacle.rth_started",
+                distance_mm=reading.distance_mm,
+                height_cm=height_cm,
+                last_direction=last_cmd.get("direction", ""),
+            )
+            context = ObstacleContext(
+                last_direction=last_cmd.get("direction", ""),
+                last_distance_cm=int(last_cmd.get("distance_cm", 0)),
+                height_cm=height_cm,
+                forward_distance_mm=reading.distance_mm,
+                mission_id=last_cmd.get("mission_id"),
+                room_id=last_cmd.get("room_id"),
+            )
+            result = await self.execute(ObstacleResponse.RETURN_TO_HOME, context)
+            logger.info(
+                "obstacle.rth_completed",
+                outcome=result.get("status", "unknown"),
+                reversed_direction=result.get("reversed_direction"),
+            )
+        finally:
+            self._rth_active = False
 
 
 @runtime_checkable
