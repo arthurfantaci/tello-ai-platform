@@ -433,6 +433,109 @@ class TestObstacleMonitorDebounce:
         assert all(z == ObstacleZone.DANGER for z in zones)
 
 
+class TestRTHGuards:
+    """Tests for on_obstacle_reading guards that prevent re-entry and grounded RTH."""
+
+    def _make_handler(self):
+        drone = MagicMock()
+        drone.safe_land.return_value = {"status": "ok"}
+        strategy = MagicMock()
+        strategy.return_to_home.return_value = {
+            "status": "returned",
+            "method": "simple_reverse",
+            "reversed_direction": "back",
+            "height_cm": 80,
+            "forward_distance_mm": 185,
+            "landed": True,
+        }
+        telemetry = AsyncMock()
+        telemetry.publish_event = AsyncMock()
+        handler = ObstacleResponseHandler(
+            drone=drone,
+            rth_strategy=strategy,
+            telemetry=telemetry,
+            last_command={"direction": "forward", "distance_cm": 50},
+        )
+        return handler, drone, strategy, telemetry
+
+    async def test_rth_skipped_when_active(self):
+        """on_obstacle_reading returns immediately if RTH is already in progress."""
+        handler, _drone, strategy, _tel = self._make_handler()
+        handler._rth_active = True
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        await handler.on_obstacle_reading(reading)
+        strategy.return_to_home.assert_not_called()
+
+    async def test_rth_skipped_when_grounded(self):
+        """on_obstacle_reading returns immediately if drone is on the ground."""
+        handler, drone, strategy, _tel = self._make_handler()
+        drone.get_height.return_value = {"status": "ok", "height_cm": 0}
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        await handler.on_obstacle_reading(reading)
+        strategy.return_to_home.assert_not_called()
+
+    async def test_rth_not_skipped_when_height_query_fails(self):
+        """A failed get_height must NOT suppress RTH — drone may be airborne."""
+        handler, drone, strategy, _tel = self._make_handler()
+        drone.get_height.return_value = {"error": "HEIGHT_FAILED", "detail": "timeout"}
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        await handler.on_obstacle_reading(reading)
+        strategy.return_to_home.assert_called_once()
+
+    async def test_rth_active_flag_set_during_execution(self):
+        """_rth_active is True while execute() is running, False after."""
+        handler, drone, strategy, _tel = self._make_handler()
+        drone.get_height.return_value = {"status": "ok", "height_cm": 80}
+
+        observed_during: list[bool] = []
+        original_execute = handler.execute
+
+        async def spy_execute(*args, **kwargs):
+            observed_during.append(handler._rth_active)
+            return await original_execute(*args, **kwargs)
+
+        handler.execute = spy_execute
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        await handler.on_obstacle_reading(reading)
+        assert observed_during == [True]
+        assert handler._rth_active is False
+
+    async def test_rth_active_flag_cleared_on_exception(self):
+        """_rth_active is cleared even if execute() raises."""
+        handler, drone, _strategy, _tel = self._make_handler()
+        drone.get_height.return_value = {"status": "ok", "height_cm": 80}
+        handler.execute = AsyncMock(side_effect=RuntimeError("execute failed"))
+
+        reading = ObstacleReading(
+            distance_mm=185,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 20),
+        )
+        with pytest.raises(RuntimeError, match="execute failed"):
+            await handler.on_obstacle_reading(reading)
+        assert handler._rth_active is False
+
+
 class TestCLIResponseProvider:
     async def test_present_options_emergency_land(self, monkeypatch):
         provider = CLIResponseProvider()
