@@ -570,3 +570,52 @@ class TestCLIResponseProvider:
         monkeypatch.setattr("builtins.input", lambda _: next(inputs))
         choice = await provider.present_options(reading)
         assert choice == ObstacleResponse.RETURN_TO_HOME
+
+
+class TestObstacleMonitorStatus:
+    def test_status_initial_state(self):
+        monitor = ObstacleMonitor(MagicMock())
+        status = monitor.status()
+        assert status == {
+            "running": False,
+            "in_danger": False,
+            "danger_clear_count": 0,
+            "latest_reading_mm": None,
+            "latest_zone": None,
+        }
+
+    async def test_status_after_start(self):
+        drone = MagicMock()
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 600}
+        config = ObstacleConfig(poll_interval_ms=50)
+        monitor = ObstacleMonitor(drone, config)
+        await monitor.start()
+        await asyncio.sleep(0.1)
+        status = monitor.status()
+        assert status["running"] is True
+        assert status["latest_reading_mm"] == 600
+        assert status["latest_zone"] == "clear"
+        await monitor.stop()
+
+    async def test_start_resets_stale_state(self):
+        """Starting the monitor resets _in_danger and _danger_clear_count."""
+        drone = MagicMock()
+        drone.get_forward_distance.return_value = {"error": "EXHAUSTED"}
+        monitor = ObstacleMonitor(drone, ObstacleConfig(poll_interval_ms=50))
+        monitor._in_danger = True
+        monitor._danger_clear_count = 2
+        await monitor.start()
+        assert monitor._in_danger is False
+        assert monitor._danger_clear_count == 0
+        await monitor.stop()
+
+
+class TestObstacleResponseHandlerStatus:
+    def test_status_initial(self):
+        handler = ObstacleResponseHandler(MagicMock())
+        assert handler.status() == {"rth_active": False}
+
+    def test_status_rth_active(self):
+        handler = ObstacleResponseHandler(MagicMock())
+        handler._rth_active = True
+        assert handler.status() == {"rth_active": True}

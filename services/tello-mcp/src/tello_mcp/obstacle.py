@@ -115,6 +115,16 @@ class ObstacleMonitor:
         """Whether the monitor is actively polling."""
         return self._running
 
+    def status(self) -> dict:
+        """Current monitor state for diagnostics."""
+        return {
+            "running": self._running,
+            "in_danger": self._in_danger,
+            "danger_clear_count": self._danger_clear_count,
+            "latest_reading_mm": self._latest.distance_mm if self._latest else None,
+            "latest_zone": self._latest.zone.value if self._latest else None,
+        }
+
     def on_reading(self, callback: Callable[[ObstacleReading], None | Awaitable[None]]) -> None:
         """Subscribe to obstacle readings."""
         self._callbacks.append(callback)
@@ -123,6 +133,8 @@ class ObstacleMonitor:
         """Start the background polling loop. Idempotent."""
         if self._running:
             return
+        self._in_danger = False
+        self._danger_clear_count = 0
         self._running = True
         self._task = asyncio.create_task(self._poll_loop())
         logger.info("obstacle_monitor.started", poll_interval_ms=self._config.poll_interval_ms)
@@ -216,6 +228,10 @@ class ObstacleResponseHandler:
         self._telemetry = telemetry
         self._last_command = last_command
         self._rth_active = False
+
+    def status(self) -> dict:
+        """Current handler state for diagnostics."""
+        return {"rth_active": self._rth_active}
 
     async def execute(
         self,
