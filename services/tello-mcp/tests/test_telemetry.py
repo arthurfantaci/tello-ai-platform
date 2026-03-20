@@ -1,6 +1,7 @@
 """Tests for the telemetry publisher."""
 
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -57,3 +58,14 @@ class TestTelemetryPublisher:
         call_args = mock_redis.xadd.call_args
         fields = call_args[0][1]
         assert fields["event_type"] == "takeoff"
+
+    async def test_publish_event_logs_redis_failure(self, mock_redis):
+        """Redis xadd failure is caught and logged, not raised."""
+        mock_redis.xadd = AsyncMock(side_effect=ConnectionError("Redis down"))
+        publisher = TelemetryPublisher(
+            redis_client=mock_redis,
+            channel="tello:telemetry",
+            stream="tello:events",
+        )
+        # Should not raise
+        await publisher.publish_event("takeoff", {"room_id": "test"})
