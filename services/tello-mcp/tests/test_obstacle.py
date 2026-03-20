@@ -190,6 +190,46 @@ class TestObstacleMonitorPolling:
         assert len(readings) > 0
         assert readings[0].distance_mm == 600
 
+    async def test_callback_exception_does_not_kill_monitor(self):
+        """Poll loop survives a callback that raises an exception."""
+        drone = MagicMock()
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 600}
+        config = ObstacleConfig(poll_interval_ms=50)
+        monitor = ObstacleMonitor(drone, config)
+
+        call_count = 0
+
+        def exploding_callback(reading):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                msg = "boom"
+                raise RuntimeError(msg)
+
+        monitor.on_reading(exploding_callback)
+        await monitor.start()
+        await asyncio.sleep(0.2)
+        await monitor.stop()
+        assert call_count >= 2
+
+    async def test_callback_exception_is_logged(self, capsys):
+        """Callback exception is logged for diagnosis."""
+        drone = MagicMock()
+        drone.get_forward_distance.return_value = {"status": "ok", "distance_mm": 600}
+        config = ObstacleConfig(poll_interval_ms=50)
+        monitor = ObstacleMonitor(drone, config)
+
+        def exploding_callback(reading):
+            msg = "boom"
+            raise RuntimeError(msg)
+
+        monitor.on_reading(exploding_callback)
+        await monitor.start()
+        await asyncio.sleep(0.15)
+        await monitor.stop()
+        captured = capsys.readouterr()
+        assert "callback_failed" in captured.out or "boom" in captured.out
+
 
 class TestObstacleResponse:
     def test_response_values(self):

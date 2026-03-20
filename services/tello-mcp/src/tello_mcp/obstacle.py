@@ -174,9 +174,16 @@ class ObstacleMonitor:
                 self._latest = reading
 
                 for cb in self._callbacks:
-                    cb_result = cb(reading)
-                    if asyncio.iscoroutine(cb_result):
-                        await cb_result
+                    try:
+                        cb_result = cb(reading)
+                        if asyncio.iscoroutine(cb_result):
+                            await cb_result
+                    except Exception:
+                        logger.exception(
+                            "obstacle.callback_failed",
+                            distance_mm=reading.distance_mm,
+                            zone=reading.zone.value,
+                        )
 
             await asyncio.sleep(self._config.poll_interval_ms / 1000)
 
