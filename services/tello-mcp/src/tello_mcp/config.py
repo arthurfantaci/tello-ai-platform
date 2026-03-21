@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Self
+from typing import ClassVar, Self
 
 from tello_core.config import BaseServiceConfig
 
@@ -12,6 +12,8 @@ from tello_core.config import BaseServiceConfig
 @dataclass(frozen=True, slots=True)
 class TelloMcpConfig(BaseServiceConfig):
     """tello-mcp specific configuration."""
+
+    require_neo4j: ClassVar[bool] = False
 
     tello_wifi_ssid: str = ""
     tello_host: str = "192.168.10.1"
