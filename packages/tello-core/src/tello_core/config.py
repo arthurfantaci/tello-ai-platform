@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 import structlog
 
@@ -52,7 +52,7 @@ class BaseServiceConfig:
         Args:
             **overrides: Values that override environment variables.
         """
-        values: dict[str, str | None] = {}
+        values: dict[str, Any] = {}
 
         # Redis is always required
         if "redis_url" in overrides:

@@ -21,6 +21,7 @@ class TestBaseServiceConfig:
         assert config.service_name == "test-service"
 
     def test_from_env_missing_required_var_raises(self, monkeypatch):
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
         monkeypatch.delenv("NEO4J_URI", raising=False)
         with pytest.raises(ConfigurationError, match="NEO4J_URI"):
             BaseServiceConfig.from_env(service_name="test")
