@@ -1,0 +1,17 @@
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.claude/
+docs/
+.env
+.mcp.json
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+**/tests/
+**/test_*/
+.gitignore
+*.md
+LICENSE
