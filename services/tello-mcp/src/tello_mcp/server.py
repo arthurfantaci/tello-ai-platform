@@ -28,9 +28,9 @@ if TYPE_CHECKING:
 
 
 async def _keepalive_loop(drone: DroneAdapter) -> None:
-    """Send keepalive every 10s to prevent 15s auto-land timeout."""
+    """Send keepalive every 5s to prevent 15s auto-land timeout."""
     while True:
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
         if drone.is_connected:
             await asyncio.to_thread(drone.keepalive)
 
