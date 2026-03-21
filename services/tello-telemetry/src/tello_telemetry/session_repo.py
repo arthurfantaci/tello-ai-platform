@@ -290,3 +290,42 @@ class SessionRepository:
                 """,
             )
             return [r.data() for r in records]
+
+    def get_session_obstacles(self, session_id: str) -> list[dict]:
+        """Get obstacle incidents for a session, ordered by time.
+
+        Args:
+            session_id: Session whose obstacles to retrieve.
+        """
+        with self._driver.session() as s:
+            records = s.run(
+                """
+                MATCH (oi:ObstacleIncident)-[:TRIGGERED_DURING]->
+                      (fs:FlightSession {id: $session_id})
+                RETURN oi {.*} AS incident
+                ORDER BY oi.timestamp
+                """,
+                session_id=session_id,
+            )
+            return [r.data()["incident"] for r in records]
+
+    def list_obstacle_incidents(self, limit: int = 10) -> list[dict]:
+        """List recent obstacle incidents with session info, newest first.
+
+        Args:
+            limit: Maximum number of incidents to return.
+        """
+        with self._driver.session() as s:
+            records = s.run(
+                """
+                MATCH (oi:ObstacleIncident)-[:TRIGGERED_DURING]->(fs:FlightSession)
+                RETURN oi {.*,
+                    session_id: fs.id,
+                    room_id: fs.room_id
+                } AS incident
+                ORDER BY oi.timestamp DESC
+                LIMIT $limit
+                """,
+                limit=limit,
+            )
+            return [r.data()["incident"] for r in records]

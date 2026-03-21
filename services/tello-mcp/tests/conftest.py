@@ -4,16 +4,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tello_core.config import BaseServiceConfig
+from tello_mcp.config import TelloMcpConfig
 
 
 @pytest.fixture()
 def mock_config():
     """Test configuration for tello-mcp."""
-    return BaseServiceConfig(
-        neo4j_uri="bolt://localhost:7687",
-        neo4j_username="neo4j",
-        neo4j_password="test",
+    return TelloMcpConfig(
         redis_url="redis://localhost:6379",
         service_name="tello-mcp-test",
     )

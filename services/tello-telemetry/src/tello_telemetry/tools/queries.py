@@ -11,7 +11,7 @@ is accessed from ctx.lifespan_context["session_repo"].
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -30,7 +30,7 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(readOnlyHint=True),
     )
-    async def list_flight_sessions(ctx: Context, limit: int = 10) -> dict:
+    async def list_flight_sessions(ctx: Context, limit: int = 10) -> Any:
         """List recent flight sessions with summary stats.
 
         Args:
@@ -43,7 +43,7 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(readOnlyHint=True),
     )
-    async def get_flight_session(ctx: Context, session_id: str) -> dict:
+    async def get_flight_session(ctx: Context, session_id: str) -> Any:
         """Get detailed info for one flight session.
 
         Args:
@@ -61,7 +61,7 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(readOnlyHint=True),
     )
-    async def get_session_telemetry(ctx: Context, session_id: str) -> dict:
+    async def get_session_telemetry(ctx: Context, session_id: str) -> Any:
         """Get sampled telemetry curve for a session.
 
         Returns battery, altitude, temperature over time.
@@ -79,7 +79,7 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(readOnlyHint=True),
     )
-    async def get_session_anomalies(ctx: Context, session_id: str) -> dict:
+    async def get_session_anomalies(ctx: Context, session_id: str) -> Any:
         """Get anomalies detected during a flight session.
 
         Args:
@@ -95,8 +95,40 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         annotations=ToolAnnotations(readOnlyHint=True),
     )
-    async def get_anomaly_summary(ctx: Context) -> dict:
+    async def get_anomaly_summary(ctx: Context) -> Any:
         """Get anomaly counts by type across all sessions."""
         repo = ctx.lifespan_context["session_repo"]
         summary = await asyncio.to_thread(repo.get_anomaly_summary)
         return {"summary": summary}
+
+    @mcp.tool(
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def get_session_obstacles(ctx: Context, session_id: str) -> Any:
+        """Get obstacle incidents detected during a flight session.
+
+        Args:
+            session_id: The session to get obstacle incidents for.
+        """
+        repo = ctx.lifespan_context["session_repo"]
+        incidents = await asyncio.to_thread(
+            repo.get_session_obstacles,
+            session_id,
+        )
+        return {"incidents": incidents, "count": len(incidents)}
+
+    @mcp.tool(
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def list_obstacle_incidents(ctx: Context, limit: int = 10) -> Any:
+        """List recent obstacle incidents across all sessions.
+
+        Args:
+            limit: Maximum number of incidents to return (default 10).
+        """
+        repo = ctx.lifespan_context["session_repo"]
+        incidents = await asyncio.to_thread(
+            repo.list_obstacle_incidents,
+            limit,
+        )
+        return {"incidents": incidents, "count": len(incidents)}

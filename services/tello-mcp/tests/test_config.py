@@ -7,32 +7,33 @@ from tello_mcp.config import TelloMcpConfig
 
 
 class TestTelloMcpConfig:
-    def test_from_env(self, monkeypatch):
-        monkeypatch.setenv("NEO4J_URI", "bolt://localhost:7687")
-        monkeypatch.setenv("NEO4J_USERNAME", "neo4j")
-        monkeypatch.setenv("NEO4J_PASSWORD", "pw")
+    def test_from_env_without_neo4j(self, monkeypatch):
+        """TelloMcpConfig.from_env works without NEO4J_* env vars."""
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
         monkeypatch.setenv("TELLO_WIFI_SSID", "RMTT-TEST")
+        monkeypatch.delenv("NEO4J_URI", raising=False)
+        monkeypatch.delenv("NEO4J_USERNAME", raising=False)
+        monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
 
         config = TelloMcpConfig.from_env(service_name="tello-mcp")
         assert config.tello_wifi_ssid == "RMTT-TEST"
         assert config.service_name == "tello-mcp"
+        assert config.neo4j_uri is None
+
+    def test_require_neo4j_is_false(self):
+        """TelloMcpConfig opts out of Neo4j requirement."""
+        assert TelloMcpConfig.require_neo4j is False
 
     def test_inherits_base_validation(self):
         with pytest.raises(ConfigurationError, match="Neo4j URI"):
             TelloMcpConfig(
                 neo4j_uri="http://bad",
-                neo4j_username="neo4j",
-                neo4j_password="pw",
                 redis_url="redis://localhost:6379",
                 service_name="test",
             )
 
     def test_telemetry_defaults(self):
         config = TelloMcpConfig(
-            neo4j_uri="bolt://localhost:7687",
-            neo4j_username="neo4j",
-            neo4j_password="pw",
             redis_url="redis://localhost:6379",
             service_name="test",
         )
@@ -42,20 +43,17 @@ class TestTelloMcpConfig:
 
     def test_tello_host_default(self):
         config = TelloMcpConfig(
-            neo4j_uri="bolt://localhost:7687",
-            neo4j_username="neo4j",
-            neo4j_password="pw",
             redis_url="redis://localhost:6379",
             service_name="test",
         )
         assert config.tello_host == "192.168.10.1"
 
     def test_tello_host_from_env(self, monkeypatch):
-        monkeypatch.setenv("NEO4J_URI", "bolt://localhost:7687")
-        monkeypatch.setenv("NEO4J_USERNAME", "neo4j")
-        monkeypatch.setenv("NEO4J_PASSWORD", "pw")
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
         monkeypatch.setenv("TELLO_HOST", "192.168.68.102")
+        monkeypatch.delenv("NEO4J_URI", raising=False)
+        monkeypatch.delenv("NEO4J_USERNAME", raising=False)
+        monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
 
         config = TelloMcpConfig.from_env(service_name="tello-mcp")
         assert config.tello_host == "192.168.68.102"

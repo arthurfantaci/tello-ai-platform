@@ -21,10 +21,12 @@
       }
     },
     "tello-mcp": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "--package", "tello-mcp", "python", "-m", "tello_mcp.server"],
-      "cwd": "."
+      "type": "http",
+      "url": "http://localhost:8100/mcp"
+    },
+    "tello-telemetry": {
+      "type": "http",
+      "url": "http://localhost:8200/mcp"
     }
   }
 }

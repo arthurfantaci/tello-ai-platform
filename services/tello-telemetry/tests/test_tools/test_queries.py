@@ -46,6 +46,8 @@ class TestQueryTools:
             "get_session_telemetry",
             "get_session_anomalies",
             "get_anomaly_summary",
+            "get_session_obstacles",
+            "list_obstacle_incidents",
         }
         assert set(self.registered_tools.keys()) == expected
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Self
+from typing import Any, ClassVar, Self
 
 import structlog
 
@@ -25,13 +25,20 @@ class BaseServiceConfig:
         @dataclass(frozen=True, slots=True)
         class TelloMcpConfig(BaseServiceConfig):
             tello_wifi_ssid: str = ""
+
+    Set require_neo4j = False on subclasses that don't use Neo4j:
+        @dataclass(frozen=True, slots=True)
+        class NoNeo4jService(BaseServiceConfig):
+            require_neo4j: ClassVar[bool] = False
     """
 
-    neo4j_uri: str
-    neo4j_username: str
-    neo4j_password: str
+    require_neo4j: ClassVar[bool] = True
+
     redis_url: str
     service_name: str
+    neo4j_uri: str | None = None
+    neo4j_username: str | None = None
+    neo4j_password: str | None = None
     neo4j_max_connection_pool_size: int = 5
     neo4j_connection_acquisition_timeout: float = 30.0
 
@@ -40,24 +47,35 @@ class BaseServiceConfig:
         """Load configuration from environment variables.
 
         Reads: NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, REDIS_URL.
-        Raises ConfigurationError for missing required vars.
+        Raises ConfigurationError for missing required vars (Neo4j only if require_neo4j=True).
 
         Args:
             **overrides: Values that override environment variables.
         """
-        required = {
+        values: dict[str, Any] = {}
+
+        # Redis is always required
+        if "redis_url" in overrides:
+            values["redis_url"] = overrides.pop("redis_url")  # type: ignore[assignment]
+        else:
+            val = os.environ.get("REDIS_URL")
+            if val is None:
+                msg = "Required environment variable REDIS_URL is not set"
+                raise ConfigurationError(msg)
+            values["redis_url"] = val
+
+        # Neo4j is conditional on require_neo4j
+        neo4j_fields = {
             "neo4j_uri": "NEO4J_URI",
             "neo4j_username": "NEO4J_USERNAME",
             "neo4j_password": "NEO4J_PASSWORD",
-            "redis_url": "REDIS_URL",
         }
-        values: dict[str, str] = {}
-        for field, env_var in required.items():
+        for field, env_var in neo4j_fields.items():
             if field in overrides:
-                values[field] = overrides.pop(field)
+                values[field] = overrides.pop(field)  # type: ignore[assignment]
             else:
                 val = os.environ.get(env_var)
-                if val is None:
+                if val is None and cls.require_neo4j:
                     msg = f"Required environment variable {env_var} is not set"
                     raise ConfigurationError(msg)
                 values[field] = val
@@ -66,7 +84,9 @@ class BaseServiceConfig:
 
     def __post_init__(self) -> None:
         """Fail-fast validation."""
-        if not any(self.neo4j_uri.startswith(s) for s in VALID_NEO4J_SCHEMES):
+        if self.neo4j_uri is not None and not any(
+            self.neo4j_uri.startswith(s) for s in VALID_NEO4J_SCHEMES
+        ):
             msg = f"Neo4j URI must start with one of {VALID_NEO4J_SCHEMES}, got: {self.neo4j_uri}"
             raise ConfigurationError(msg)
         if not any(self.redis_url.startswith(s) for s in VALID_REDIS_SCHEMES):

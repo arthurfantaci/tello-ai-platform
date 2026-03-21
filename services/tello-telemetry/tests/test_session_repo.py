@@ -195,3 +195,38 @@ class TestGetAnomalySummary:
         result = repo.get_anomaly_summary()
         assert len(result) == 1
         assert result[0]["count"] == 5
+
+
+class TestGetSessionObstacles:
+    def test_returns_obstacle_list(self, repo, mock_session):
+        record = MagicMock()
+        record.data.return_value = {
+            "incident": {
+                "id": "inc-1",
+                "forward_distance_mm": 185,
+                "zone": "DANGER",
+                "response": "RETURN_TO_HOME",
+            },
+        }
+        mock_session.run.return_value = [record]
+        result = repo.get_session_obstacles("sess-1")
+        assert len(result) == 1
+        assert result[0]["zone"] == "DANGER"
+        assert result[0]["forward_distance_mm"] == 185
+
+
+class TestListObstacleIncidents:
+    def test_returns_incident_list(self, repo, mock_session):
+        record = MagicMock()
+        record.data.return_value = {
+            "incident": {
+                "id": "inc-1",
+                "forward_distance_mm": 136,
+                "session_id": "sess-1",
+                "room_id": "living_room",
+            },
+        }
+        mock_session.run.return_value = [record]
+        result = repo.list_obstacle_incidents(limit=5)
+        assert len(result) == 1
+        assert result[0]["session_id"] == "sess-1"
