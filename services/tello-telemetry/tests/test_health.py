@@ -52,3 +52,17 @@ class TestHealthEndpoint:
         assert response.status_code == 503
         data = response.json()
         assert data["redis"] is False
+
+    def test_health_returns_503_when_not_started(self, client, monkeypatch):
+        """Health endpoint returns 503 before lifespan completes."""
+        monkeypatch.setattr(
+            "tello_telemetry.server._health_deps",
+            lambda: (None, None),
+        )
+
+        response = client.get("/health")
+        assert response.status_code == 503
+        data = response.json()
+        assert data["status"] == "degraded"
+        assert data["redis"] is False
+        assert data["neo4j"] is False
