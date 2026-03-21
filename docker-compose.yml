@@ -25,6 +25,28 @@ services:
       timeout: 5s
       retries: 5
 
+  tello-telemetry:
+    build:
+      context: .
+      dockerfile: services/tello-telemetry/Dockerfile
+    ports:
+      - "8200:8200"
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379
+      NEO4J_URI: bolt://neo4j:7687
+    depends_on:
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8200/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
 volumes:
   neo4j_data:
   neo4j_logs:
