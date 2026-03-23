@@ -142,6 +142,32 @@ class FlightCoordinator:
         # Remainder-first: first chunk = CHUNK_SIZE_CM + remainder
         return [CHUNK_SIZE_CM + remainder] + [CHUNK_SIZE_CM] * (full_chunks - 1)
 
+    # ── Checkpoint inspection ────────────────────────────────────
+
+    async def _poll_forward_distance(self) -> bool:
+        """Actively poll the forward ToF sensor and check if movement is safe.
+
+        Unlike monitor.is_safe_for_movement() which reads cached _latest
+        (stale during chunked moves because the RLock blocks background
+        polling), this method performs a fresh sensor read between chunks.
+
+        Returns True if safe to continue (CLEAR or CAUTION zone).
+        Returns True if the sensor read fails (no obstacle evidence).
+        """
+        result = await asyncio.to_thread(self._drone.get_forward_distance)
+        if result.get("status") != "ok":
+            logger.warning("checkpoint.sensor_read_failed", result=result)
+            return True  # No obstacle evidence — continue
+
+        distance_mm = result["distance_mm"]
+        zone = self._monitor.classify_zone(distance_mm)
+        logger.debug(
+            "checkpoint.polled",
+            distance_mm=distance_mm,
+            zone=zone.value,
+        )
+        return zone.value in ("clear", "caution")
+
     # ── Command execution ────────────────────────────────────────
 
     async def execute_move(
@@ -169,8 +195,9 @@ class FlightCoordinator:
         self._executing = True
         try:
             for i, chunk_cm in enumerate(chunks):
-                # Checkpoint: is it safe to continue?
-                if not self._monitor.is_safe_for_movement():
+                # Checkpoint: actively poll ToF sensor (not cached — cache
+                # goes stale during chunked moves due to RLock contention)
+                if not await self._poll_forward_distance():
                     logger.warning(
                         "move.aborted_obstacle",
                         direction=direction,

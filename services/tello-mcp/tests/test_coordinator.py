@@ -4,11 +4,25 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from tello_core.models import ObstacleZone
 from tello_mcp.coordinator import FlightCoordinator
 
+# ── Helpers ──────────────────────────────────────────────────────
 
-def _make_drone(**overrides: dict) -> MagicMock:
-    """Create a mock DroneAdapter with sensible defaults."""
+# Default: sensor reads 800mm (CLEAR zone)
+_CLEAR_READING = {"status": "ok", "distance_mm": 800}
+_WARNING_READING = {"status": "ok", "distance_mm": 250}
+_DANGER_READING = {"status": "ok", "distance_mm": 150}
+_SENSOR_ERROR = {"error": "COMMAND_FAILED", "detail": "timeout"}
+
+
+def _make_drone(*, tof_readings: list[dict] | None = None, **overrides) -> MagicMock:
+    """Create a mock DroneAdapter with sensible defaults.
+
+    Args:
+        tof_readings: Sequence of get_forward_distance return values.
+            If None, always returns CLEAR (800mm).
+    """
     drone = MagicMock()
     drone.move.return_value = {"status": "ok"}
     drone.takeoff.return_value = {"status": "ok"}
@@ -16,15 +30,36 @@ def _make_drone(**overrides: dict) -> MagicMock:
     drone.rotate.return_value = {"status": "ok"}
     drone.emergency.return_value = {"status": "ok", "warning": "Motors killed"}
     drone.go_xyz_speed_mid.return_value = {"status": "ok"}
+    if tof_readings is not None:
+        drone.get_forward_distance.side_effect = tof_readings
+    else:
+        drone.get_forward_distance.return_value = _CLEAR_READING
     for k, v in overrides.items():
         setattr(drone, k, v)
     return drone
 
 
-def _make_monitor(*, safe: bool = True) -> MagicMock:
-    """Create a mock ObstacleMonitor."""
+def _make_monitor() -> MagicMock:
+    """Create a mock ObstacleMonitor with real classify_zone."""
     monitor = MagicMock()
-    monitor.is_safe_for_movement.return_value = safe
+
+    # Use real zone classification so _poll_forward_distance works correctly
+    from tello_mcp.obstacle import ObstacleConfig
+
+    config = ObstacleConfig()
+
+    def classify_zone(distance_mm: int) -> ObstacleZone:
+        if distance_mm >= config.out_of_range_min:
+            return ObstacleZone.CLEAR
+        if distance_mm < config.danger_mm:
+            return ObstacleZone.DANGER
+        if distance_mm < config.warning_mm:
+            return ObstacleZone.WARNING
+        if distance_mm < config.caution_mm:
+            return ObstacleZone.CAUTION
+        return ObstacleZone.CLEAR
+
+    monitor.classify_zone = classify_zone
     return monitor
 
 
@@ -39,19 +74,19 @@ class TestChunkDecomposition:
     """Test the static chunk decomposition logic."""
 
     def test_exact_multiple(self):
-        """100cm → 5 chunks of 20cm each."""
+        """100cm -> 5 chunks of 20cm each."""
         coord = FlightCoordinator(drone=_make_drone(), monitor=_make_monitor())
         chunks = coord._decompose_chunks(100)
         assert chunks == [20, 20, 20, 20, 20]
 
     def test_remainder_first(self):
-        """50cm → [30, 20] — remainder absorbed by first chunk."""
+        """50cm -> [30, 20] -- remainder absorbed by first chunk."""
         coord = FlightCoordinator(drone=_make_drone(), monitor=_make_monitor())
         chunks = coord._decompose_chunks(50)
         assert chunks == [30, 20]
 
     def test_minimum_no_split(self):
-        """20cm → [20] — already minimum size, no split."""
+        """20cm -> [20] -- already minimum size, no split."""
         coord = FlightCoordinator(drone=_make_drone(), monitor=_make_monitor())
         chunks = coord._decompose_chunks(20)
         assert chunks == [20]
@@ -63,13 +98,13 @@ class TestChunkDecomposition:
         assert chunks == [30]
 
     def test_large_distance(self):
-        """500cm → 25 chunks of 20cm."""
+        """500cm -> 25 chunks of 20cm."""
         coord = FlightCoordinator(drone=_make_drone(), monitor=_make_monitor())
         chunks = coord._decompose_chunks(500)
         assert chunks == [20] * 25
 
     def test_remainder_70(self):
-        """70cm → [30, 20, 20] — 10cm remainder on first chunk."""
+        """70cm -> [30, 20, 20] -- 10cm remainder on first chunk."""
         coord = FlightCoordinator(drone=_make_drone(), monitor=_make_monitor())
         chunks = coord._decompose_chunks(70)
         assert chunks == [30, 20, 20]
@@ -79,11 +114,10 @@ class TestChunkedMoveExecution:
     """Test execute_move with mocked drone and monitor."""
 
     async def test_full_completion(self):
-        """All chunks complete when monitor reports safe."""
-        drone = _make_drone()
-        monitor = _make_monitor(safe=True)
+        """All chunks complete when sensor reports safe."""
+        drone = _make_drone()  # Always returns 800mm CLEAR
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
         result = await coord.execute_move("forward", 100)
         assert result["status"] == "ok"
@@ -95,13 +129,20 @@ class TestChunkedMoveExecution:
         assert drone.move.call_count == 5
 
     async def test_aborts_on_warning(self):
-        """Move stops when monitor reports unsafe between chunks."""
-        drone = _make_drone()
-        monitor = _make_monitor(safe=True)
-        # Safe for first 2 chunks, then unsafe
-        monitor.is_safe_for_movement.side_effect = [True, True, True, False]
+        """Move stops when active sensor poll reports WARNING between chunks."""
+        # 100cm = 5 chunks. Sensor: clear, clear, clear, WARNING
+        # Chunk 1: poll clear -> execute. Chunk 2: poll clear -> execute.
+        # Chunk 3: poll clear -> execute. Chunk 4: poll WARNING -> abort.
+        drone = _make_drone(
+            tof_readings=[
+                _CLEAR_READING,
+                _CLEAR_READING,
+                _CLEAR_READING,
+                _WARNING_READING,
+            ]
+        )
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
         result = await coord.execute_move("forward", 100)
         assert result["status"] == "ok"
@@ -112,10 +153,9 @@ class TestChunkedMoveExecution:
 
     async def test_aborts_on_danger(self):
         """Move stops when first checkpoint is unsafe."""
-        drone = _make_drone()
-        monitor = _make_monitor(safe=False)
+        drone = _make_drone(tof_readings=[_DANGER_READING])
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
         result = await coord.execute_move("forward", 100)
         assert result["status"] == "ok"
@@ -125,38 +165,21 @@ class TestChunkedMoveExecution:
         drone.move.assert_not_called()
 
     async def test_continues_on_clear(self):
-        """All chunks execute when monitor always reports safe."""
-        drone = _make_drone()
-        monitor = _make_monitor(safe=True)
+        """All chunks execute when sensor always reports safe."""
+        drone = _make_drone()  # Always 800mm CLEAR
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
         result = await coord.execute_move("forward", 60)
         assert result["distance_completed_cm"] == 60
         assert result["chunks_completed"] == 3
         assert drone.move.call_count == 3
 
-    async def test_partial_result_distance(self):
-        """Aborted move reports distance_completed_cm correctly."""
-        drone = _make_drone()
-        monitor = _make_monitor()
-        # Safe, execute first chunk (30), then unsafe
-        monitor.is_safe_for_movement.side_effect = [True, True, False]
-        coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
-        )
-        result = await coord.execute_move("forward", 50)
-        # 50 -> [30, 20]. Both checks safe, both chunks execute.
-        assert result["distance_completed_cm"] == 50
-        assert result["chunks_completed"] == 2
-
     async def test_partial_result_with_remainder(self):
-        """70cm → [30, 20, 20]. Abort after first chunk."""
-        drone = _make_drone()
-        monitor = _make_monitor()
-        monitor.is_safe_for_movement.side_effect = [True, False]
+        """70cm -> [30, 20, 20]. Abort after first chunk."""
+        drone = _make_drone(tof_readings=[_CLEAR_READING, _WARNING_READING])
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
         result = await coord.execute_move("forward", 70)
         assert result["distance_completed_cm"] == 30
@@ -171,9 +194,8 @@ class TestChunkedMoveExecution:
             {"status": "ok"},
             {"error": "COMMAND_FAILED", "detail": "timeout"},
         ]
-        monitor = _make_monitor(safe=True)
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
         result = await coord.execute_move("forward", 60)
         assert result["error"] == "COMMAND_FAILED"
@@ -181,13 +203,19 @@ class TestChunkedMoveExecution:
 
     async def test_last_command_tracks_actual_distance(self):
         """After partial completion, last_command has actual distance traveled."""
-        drone = _make_drone()
-        monitor = _make_monitor()
-        monitor.is_safe_for_movement.side_effect = [True, True, True, False]
+        # 100cm = 5 chunks. Clear, clear, clear, WARNING -> abort after 3 chunks
+        drone = _make_drone(
+            tof_readings=[
+                _CLEAR_READING,
+                _CLEAR_READING,
+                _CLEAR_READING,
+                _WARNING_READING,
+            ]
+        )
         last_command: dict = {}
         coord = FlightCoordinator(
             drone=drone,
-            monitor=monitor,
+            monitor=_make_monitor(),
             last_command=last_command,
             inter_chunk_delay_s=0.0,
             post_delay_s=0.0,
@@ -198,18 +226,34 @@ class TestChunkedMoveExecution:
 
     async def test_last_command_tracks_full_distance(self):
         """After full completion, last_command has full distance."""
-        drone = _make_drone()
-        monitor = _make_monitor(safe=True)
+        drone = _make_drone()  # Always CLEAR
         last_command: dict = {}
         coord = FlightCoordinator(
             drone=drone,
-            monitor=monitor,
+            monitor=_make_monitor(),
             last_command=last_command,
             inter_chunk_delay_s=0.0,
             post_delay_s=0.0,
         )
         await coord.execute_move("forward", 100)
         assert last_command["distance_cm"] == 100
+
+    async def test_sensor_error_continues(self):
+        """If sensor read fails between chunks, continue (no obstacle evidence)."""
+        drone = _make_drone(
+            tof_readings=[
+                _CLEAR_READING,
+                _SENSOR_ERROR,
+                _CLEAR_READING,
+            ]
+        )
+        coord = FlightCoordinator(
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
+        )
+        result = await coord.execute_move("forward", 60)
+        assert result["status"] == "ok"
+        assert result["distance_completed_cm"] == 60
+        assert result["chunks_completed"] == 3
 
 
 class TestOwnership:
@@ -247,9 +291,8 @@ class TestOwnership:
     async def test_ownership_enforced_on_move(self):
         """Move by non-owner returns error without executing."""
         drone = _make_drone()
-        monitor = _make_monitor(safe=True)
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
         await coord.acquire_control("navigator")
         result = await coord.execute_move("forward", 100, actor="mcp")
@@ -266,9 +309,8 @@ class TestOwnership:
 
     async def test_move_by_owner_succeeds(self):
         drone = _make_drone()
-        monitor = _make_monitor(safe=True)
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
         await coord.acquire_control("navigator")
         result = await coord.execute_move("forward", 20, actor="navigator")
@@ -277,9 +319,8 @@ class TestOwnership:
     async def test_mcp_default_owner_can_move(self):
         """Default owner (mcp) can move without acquire."""
         drone = _make_drone()
-        monitor = _make_monitor(safe=True)
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
         result = await coord.execute_move("forward", 20)
         assert result["status"] == "ok"
@@ -293,11 +334,9 @@ class TestOwnership:
     async def test_release_during_execution_rejected(self):
         """release_control during a chunked move returns error."""
         drone = _make_drone()
-        monitor = _make_monitor(safe=True)
         coord = FlightCoordinator(
-            drone=drone, monitor=monitor, inter_chunk_delay_s=0.0, post_delay_s=0.0
+            drone=drone, monitor=_make_monitor(), inter_chunk_delay_s=0.0, post_delay_s=0.0
         )
-        # Simulate executing state
         coord._executing = True
         result = await coord.release_control("mcp")
         assert result["error"] == "EXECUTING"
@@ -360,12 +399,10 @@ class TestEmergencyStop:
     """Emergency stop must bypass ownership entirely."""
 
     async def test_emergency_stop_bypasses_coordinator(self):
-        """emergency_stop works regardless of ownership — it's safety-critical."""
+        """emergency_stop works regardless of ownership -- safety-critical."""
         drone = _make_drone()
         coord = FlightCoordinator(drone=drone, monitor=_make_monitor())
         await coord.acquire_control("navigator")
-        # emergency_stop doesn't go through coordinator — called directly on drone
-        # This test validates the pattern, not the coordinator itself
         result = drone.emergency()
         assert result["status"] == "ok"
 
@@ -407,10 +444,9 @@ class TestDelays:
 
     async def test_inter_chunk_delay(self):
         drone = _make_drone()
-        monitor = _make_monitor(safe=True)
         coord = FlightCoordinator(
             drone=drone,
-            monitor=monitor,
+            monitor=_make_monitor(),
             inter_chunk_delay_s=0.1,
             post_delay_s=0.0,
         )
@@ -422,10 +458,9 @@ class TestDelays:
 
     async def test_post_delay_after_move(self):
         drone = _make_drone()
-        monitor = _make_monitor(safe=True)
         coord = FlightCoordinator(
             drone=drone,
-            monitor=monitor,
+            monitor=_make_monitor(),
             inter_chunk_delay_s=0.0,
             post_delay_s=0.5,
         )
