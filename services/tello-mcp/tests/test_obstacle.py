@@ -619,3 +619,85 @@ class TestObstacleResponseHandlerStatus:
         handler = ObstacleResponseHandler(MagicMock())
         handler._rth_active = True
         assert handler.status() == {"rth_active": True}
+
+
+class TestIsSafeForMovement:
+    """Tests for is_safe_for_movement() — raw (undebounced) sensor check."""
+
+    def _make_monitor(self, readings: list[int], poll_ms: int = 50) -> tuple:
+        drone = MagicMock()
+        _sentinel = {"error": "EXHAUSTED", "detail": "no more readings"}
+        drone.get_forward_distance.side_effect = [
+            {"status": "ok", "distance_mm": mm} for mm in readings
+        ] + [_sentinel] * 20
+        drone.stop = MagicMock(return_value={"status": "ok"})
+        config = ObstacleConfig(
+            poll_interval_ms=poll_ms,
+            required_clear_readings=3,
+        )
+        monitor = ObstacleMonitor(drone, config)
+        return monitor, drone
+
+    def test_safe_when_no_readings(self):
+        """Before any poll, assume safe (no data = no obstacle evidence)."""
+        monitor = ObstacleMonitor(MagicMock())
+        assert monitor.is_safe_for_movement() is True
+
+    def test_safe_when_clear(self):
+        """CLEAR raw reading → safe."""
+        monitor = ObstacleMonitor(MagicMock())
+        reading = ObstacleReading(
+            distance_mm=600,
+            zone=ObstacleZone.CLEAR,
+            timestamp=datetime(2026, 3, 23),
+        )
+        monitor._latest = reading
+        assert monitor.is_safe_for_movement() is True
+
+    def test_safe_when_caution(self):
+        """CAUTION raw reading → safe (approaching, but not yet dangerous)."""
+        monitor = ObstacleMonitor(MagicMock())
+        reading = ObstacleReading(
+            distance_mm=400,
+            zone=ObstacleZone.CAUTION,
+            timestamp=datetime(2026, 3, 23),
+        )
+        monitor._latest = reading
+        assert monitor.is_safe_for_movement() is True
+
+    def test_unsafe_when_warning(self):
+        """WARNING raw reading → NOT safe (too close for another 20cm chunk)."""
+        monitor = ObstacleMonitor(MagicMock())
+        reading = ObstacleReading(
+            distance_mm=250,
+            zone=ObstacleZone.WARNING,
+            timestamp=datetime(2026, 3, 23),
+        )
+        monitor._latest = reading
+        assert monitor.is_safe_for_movement() is False
+
+    def test_unsafe_when_danger(self):
+        """DANGER raw reading → NOT safe."""
+        monitor = ObstacleMonitor(MagicMock())
+        reading = ObstacleReading(
+            distance_mm=150,
+            zone=ObstacleZone.DANGER,
+            timestamp=datetime(2026, 3, 23),
+        )
+        monitor._latest = reading
+        assert monitor.is_safe_for_movement() is False
+
+    async def test_safe_after_danger_debounce_clears(self):
+        """After DANGER resolves, is_safe_for_movement() returns True immediately.
+
+        The debounced reported_zone may still be DANGER (requires 3 clear readings),
+        but the raw sensor shows CLEAR — movement should be allowed.
+        """
+        monitor, _drone = self._make_monitor([150, 600])
+        await monitor.start()
+        await asyncio.sleep(0.2)
+        await monitor.stop()
+        # Debounced zone is still DANGER (only 1 clear reading, need 3)
+        assert monitor.latest.zone == ObstacleZone.DANGER
+        # But raw reading is 600mm = CLEAR, so movement is safe
+        assert monitor.is_safe_for_movement() is True

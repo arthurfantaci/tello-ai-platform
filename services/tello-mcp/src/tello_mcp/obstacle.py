@@ -105,6 +105,23 @@ class ObstacleMonitor:
         """Most recent obstacle reading, or None if not yet polled."""
         return self._latest
 
+    def is_safe_for_movement(self) -> bool:
+        """Check whether it is safe to execute the next movement chunk.
+
+        Uses the *raw* sensor reading (undebounced) so that movement can
+        resume immediately after a DANGER event clears, without waiting
+        for the debounce counter (required_clear_readings).
+
+        Safe zones: CLEAR, CAUTION.
+        Unsafe zones: WARNING, DANGER.
+
+        Returns True when no reading exists yet (no obstacle evidence).
+        """
+        if self._latest is None:
+            return True
+        raw_zone = self.classify_zone(self._latest.distance_mm)
+        return raw_zone in (ObstacleZone.CLEAR, ObstacleZone.CAUTION)
+
     @property
     def config(self) -> ObstacleConfig:
         """Current obstacle configuration."""

@@ -31,7 +31,7 @@ class DroneAdapter:
     """Abstraction layer over djitellopy.Tello.
 
     Provides structured return values (never raw exceptions)
-    and a consistent interface for the command queue.
+    and a consistent interface for the FlightCoordinator.
     """
 
     def __init__(self, host: str = "192.168.10.1") -> None:
