@@ -16,12 +16,12 @@ from fastmcp import FastMCP
 from tello_core.config import configure_structlog
 from tello_core.redis_client import create_redis_client
 from tello_mcp.config import TelloMcpConfig
+from tello_mcp.coordinator import FlightCoordinator
 from tello_mcp.drone import DroneAdapter
 from tello_mcp.obstacle import ObstacleConfig, ObstacleMonitor, ObstacleResponseHandler
-from tello_mcp.queue import CommandQueue
 from tello_mcp.strategies import SimpleReverseRTH
 from tello_mcp.telemetry import TelemetryPublisher
-from tello_mcp.tools import connection, expansion, flight, sensors
+from tello_mcp.tools import connection, coordination, expansion, flight, sensors
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -46,7 +46,6 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
 
     redis = create_redis_client(config.redis_url)
     drone = DroneAdapter(host=config.tello_host)
-    queue = CommandQueue()
     obstacle_config = ObstacleConfig.from_env()
     monitor = ObstacleMonitor(drone, obstacle_config)
     telemetry = TelemetryPublisher(
@@ -66,8 +65,13 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
     )
     monitor.on_reading(handler.on_obstacle_reading)
 
-    # Start queue consumer — without this, all enqueue() calls hang forever
-    queue_task = asyncio.create_task(queue.start())
+    # FlightCoordinator replaces CommandQueue — unified command execution
+    coordinator = FlightCoordinator(
+        drone=drone,
+        monitor=monitor,
+        telemetry=telemetry,
+        last_command=last_command,
+    )
 
     # Best-effort auto-connect — warn on failure, don't block startup
     result = drone.connect()
@@ -84,7 +88,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
     try:
         yield {
             "drone": drone,
-            "queue": queue,
+            "coordinator": coordinator,
             "redis": redis,
             "telemetry": telemetry,
             "config": config,
@@ -97,10 +101,6 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
         keepalive_task.cancel()
         with suppress(asyncio.CancelledError):
             await keepalive_task
-        await queue.stop()
-        queue_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await queue_task
         drone.disconnect()
         await redis.aclose()
 
@@ -109,7 +109,8 @@ mcp = FastMCP(
     name="tello-mcp",
     instructions=(
         "Hardware abstraction for DJI Tello TT drone. "
-        "All flight commands are serialized through an async queue. "
+        "Flight commands go through FlightCoordinator with chunked moves and obstacle checking. "
+        "Use acquire_control/release_control for multi-actor coordination. "
         "Sensor tools are read-only and return current telemetry."
     ),
     lifespan=lifespan,
@@ -120,6 +121,7 @@ connection.register(mcp)
 flight.register(mcp)
 sensors.register(mcp)
 expansion.register(mcp)
+coordination.register(mcp)
 
 
 def main() -> None:
